@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from amplifier_collections import extract_collection_name_from_path
+
 from .exceptions import ProfileError
 from .exceptions import ProfileNotFoundError
 from .protocols import CollectionResolverProtocol
@@ -57,14 +59,13 @@ class ProfileLoader:
                     continue
 
                 # Check if this profile is from a collection
+                # Per DRY: Use library utility instead of manual parsing
                 if "/collections/" in str(search_path):
-                    # Extract collection name
-                    parts = search_path.parts
-                    try:
-                        collections_idx = parts.index("collections")
-                        collection_name = parts[collections_idx + 1]
+                    collection_name = extract_collection_name_from_path(search_path)
+                    if collection_name:
                         profiles.add(f"{collection_name}:{profile_name}")
-                    except (ValueError, IndexError):
+                    else:
+                        # Fallback if extraction fails
                         profiles.add(profile_name)
                 else:
                     profiles.add(profile_name)

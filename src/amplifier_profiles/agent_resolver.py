@@ -3,6 +3,8 @@
 import os
 from pathlib import Path
 
+from amplifier_collections import extract_collection_name_from_path
+
 from .protocols import CollectionResolverProtocol
 
 
@@ -105,13 +107,13 @@ class AgentResolver:
                 agent_name = agent_file.stem
 
                 # Check if this agent is from a collection
+                # Per DRY: Use library utility instead of manual parsing
                 if "/collections/" in str(search_path):
-                    parts = search_path.parts
-                    try:
-                        collections_idx = parts.index("collections")
-                        collection_name = parts[collections_idx + 1]
+                    collection_name = extract_collection_name_from_path(search_path)
+                    if collection_name:
                         agents.add(f"{collection_name}:{agent_name}")
-                    except (ValueError, IndexError):
+                    else:
+                        # Fallback if extraction fails
                         agents.add(agent_name)
                 else:
                     agents.add(agent_name)

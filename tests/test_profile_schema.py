@@ -1,6 +1,6 @@
 """Tests for amplifier_profiles.schema module."""
 
-import pytest
+import pytest  # type: ignore
 from amplifier_profiles.schema import AgentsConfig
 from amplifier_profiles.schema import ModuleConfig
 from amplifier_profiles.schema import Profile
