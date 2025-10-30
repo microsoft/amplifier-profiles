@@ -1,5 +1,6 @@
 """Profile compiler that converts profiles to Mount Plans."""
 
+import logging
 from typing import TYPE_CHECKING
 from typing import Any
 
@@ -7,6 +8,8 @@ from .schema import Profile
 
 if TYPE_CHECKING:
     from .agent_loader import AgentLoader
+
+logger = logging.getLogger(__name__)
 
 
 def compile_profile_to_mount_plan(
@@ -105,11 +108,13 @@ def compile_profile_to_mount_plan(
             try:
                 agent = agent_loader.load_agent(agent_name)
                 agents_dict[agent_name] = agent.to_mount_plan_fragment()
-            except Exception:
-                # Skip agents that fail to load
-                pass
+                logger.debug(f"Loaded agent: {agent_name}")
+            except Exception as e:
+                # Log warning but continue loading other agents
+                logger.warning(f"Failed to load agent '{agent_name}': {e}")
 
         mount_plan["agents"] = agents_dict
+        logger.info(f"Loaded {len(agents_dict)} agents into mount plan")
 
     return mount_plan
 
