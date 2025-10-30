@@ -1,26 +1,41 @@
 """Profile compiler that converts profiles to Mount Plans."""
 
+from typing import TYPE_CHECKING
 from typing import Any
 
 from .schema import Profile
 
+if TYPE_CHECKING:
+    from .agent_loader import AgentLoader
 
-def compile_profile_to_mount_plan(base: Profile, overlays: list[Profile] | None = None) -> dict[str, Any]:
+
+def compile_profile_to_mount_plan(
+    base: Profile,
+    overlays: list[Profile] | None = None,
+    agent_loader: "AgentLoader | None" = None,
+) -> dict[str, Any]:
     """
     Compile a profile and its overlays into a Mount Plan.
 
     This function takes a base profile and optional overlay profiles and merges them
     into a single Mount Plan dictionary that can be passed to AmplifierSession.
 
+    Per KERNEL_PHILOSOPHY:
+    - Apps inject agent_loader (policy: where to search for agents)
+    - Library provides mechanism (how to load agents from profile.agents config)
+
     Merge strategy:
     1. Start with base profile
     2. Apply each overlay in order (increasing precedence)
     3. Module lists are merged by module ID (later definitions override earlier ones)
     4. Session config fields are overridden (not merged)
+    5. Load agents (if profile.agents config AND agent_loader provided)
 
     Args:
         base: Base profile to compile
         overlays: Optional list of overlay profiles to merge (in precedence order)
+        agent_loader: Optional agent loader (app injects search paths via this)
+                     If None, agents won't be loaded (profile.agents config ignored)
 
     Returns:
         Mount Plan dictionary suitable for AmplifierSession
@@ -72,11 +87,9 @@ def compile_profile_to_mount_plan(base: Profile, overlays: list[Profile] | None 
     for overlay in overlays:
         mount_plan = _merge_profile_into_mount_plan(mount_plan, overlay)
 
-    # Load agents using agent loading system
-    if base.agents:
-        from .agent_loader import AgentLoader
-
-        agent_loader = AgentLoader()
+    # Load agents using agent loading system (if agent_loader provided by app)
+    # Per KERNEL_PHILOSOPHY: App injects policy (where to search) via agent_loader
+    if base.agents and agent_loader is not None:
         agents_dict = {}
 
         # Determine which agents to load
@@ -87,7 +100,7 @@ def compile_profile_to_mount_plan(base: Profile, overlays: list[Profile] | None 
         else:
             agent_names_to_load = []
 
-        # Load agents from standard search locations
+        # Load agents from app-configured search locations
         for agent_name in agent_names_to_load:
             try:
                 agent = agent_loader.load_agent(agent_name)
