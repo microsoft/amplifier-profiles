@@ -49,7 +49,7 @@ class Agent(BaseModel):
     - Just configuration overlays applied to parent sessions
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     meta: AgentMetadata = Field(..., description="Agent metadata")
 
