@@ -107,6 +107,13 @@ class ProfileLoader:
                     if full_path.exists() and full_path.is_file():
                         return full_path
 
+                    # Hybrid packaging fallback: Check parent directory
+                    # Per WORK_WITH_STANDARDS: Resources may be at parent level
+                    if (collection_path / "pyproject.toml").exists():
+                        parent_path = collection_path.parent / "profiles" / simple_name
+                        if parent_path.exists() and parent_path.is_file():
+                            return parent_path
+
             return None
 
         # Simple name: "base" (searches local paths)
