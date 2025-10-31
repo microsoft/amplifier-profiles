@@ -31,4 +31,4 @@ include = ["amplifier_profiles*"]
 amplifier_profiles = ["py.typed"]
 
 [tool.uv.sources]
-amplifier-collections = { path = "../amplifier-collections" }
+amplifier-collections = { git = "https://github.com/microsoft/amplifier-collections", branch = "main" }
