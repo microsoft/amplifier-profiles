@@ -213,6 +213,7 @@ from amplifier_profiles import (
     Profile, ProfileMetadata, SessionConfig, ModuleConfig,
     AgentsConfig
 )
+# Note: ModuleConfig has a to_dict() method for Mount Plan conversion
 
 class ProfileMetadata(BaseModel):
     """Profile identification and inheritance."""
@@ -231,6 +232,9 @@ class ModuleConfig(BaseModel):
     module: str
     source: str | dict[str, Any] | None = None
     config: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary format for Mount Plan."""
 
 class SessionConfig(BaseModel):
     """Session-level module configuration."""
@@ -254,25 +258,43 @@ class Profile(BaseModel):
 #### Agent Models
 
 ```python
-from amplifier_profiles import Agent, AgentMetadata
+from amplifier_profiles import Agent, AgentMeta, SystemConfig, AgentTools
 
-class AgentMetadata(BaseModel):
-    """Agent identification."""
+class AgentMeta(BaseModel):
+    """Agent metadata and identification.
+
+    Note: AgentMeta is the exported name. The underlying class is AgentMetadata,
+    but AgentMeta is the public API for backward compatibility.
+    """
     model_config = ConfigDict(frozen=True)
 
     name: str
     description: str
 
+class SystemConfig(BaseModel):
+    """System instruction configuration."""
+    model_config = ConfigDict(frozen=True)
+
+    instruction: str
+
+class AgentTools(BaseModel):
+    """Agent tool configuration."""
+    model_config = ConfigDict(frozen=True)
+
+    providers: list[ModuleConfig] = Field(default_factory=list)
+    tools: list[ModuleConfig] = Field(default_factory=list)
+    hooks: list[ModuleConfig] = Field(default_factory=list)
+
 class Agent(BaseModel):
     """Agent specification (partial mount plan)."""
     model_config = ConfigDict(frozen=True)
 
-    meta: AgentMetadata
+    meta: AgentMeta  # Agent metadata
     providers: list[ModuleConfig] = Field(default_factory=list)
     tools: list[ModuleConfig] = Field(default_factory=list)
     hooks: list[ModuleConfig] = Field(default_factory=list)
     session: dict[str, Any] | None = None
-    system: dict[str, str] | None = None  # {"instruction": str}
+    system: SystemConfig | None = None
 
     def to_mount_plan_fragment(self) -> dict[str, Any]:
         """Convert to partial mount plan for agent delegation."""
@@ -332,23 +354,11 @@ path = loader.find_profile_file("developer-expertise:dev")
 path = loader.find_profile_file("design-intelligence:profiles/designer.md")
 # Returns: Path to profile file or None
 
-# Load profile (with inheritance and overlays resolved)
+# Load profile (with inheritance resolved)
 profile = loader.load_profile("dev")  # Simple name
 # Or: loader.load_profile("developer-expertise:dev")  # Collection syntax
 # Or: loader.load_profile("design-intelligence:profiles/designer.md")  # Full path
-# Returns: Profile model
-
-# Resolve inheritance chain
-chain = loader.resolve_inheritance(profile)
-# Returns: [parent, child, grandchild] in merge order
-
-# Load overlays for a name
-overlays = loader.load_overlays("dev")
-# Returns: List of profiles from different search paths
-
-# Merge two profiles
-merged = loader.merge_profiles(parent, child)
-# Returns: New merged Profile
+# Returns: Profile model with inheritance chain already merged
 
 # Get profile source label
 source = loader.get_profile_source("dev")
@@ -433,7 +443,8 @@ from amplifier_profiles import compile_profile_to_mount_plan
 
 def compile_profile_to_mount_plan(
     base: Profile,
-    overlays: list[Profile] | None = None
+    overlays: list[Profile] | None = None,
+    agent_loader: AgentLoader | None = None
 ) -> dict[str, Any]:
     """Compile profile(s) to Mount Plan for AmplifierSession.
 
@@ -441,12 +452,14 @@ def compile_profile_to_mount_plan(
     1. Extract session config (orchestrator, context)
     2. Build module lists (providers, tools, hooks)
     3. Apply overlays (merge in precedence order)
-    4. Load agents (if agents config present)
-    5. Inject profile-level configs (task, ui, logging)
+    4. Load agents (if agents config present AND agent_loader provided)
+    5. Inject profile-level configs
 
     Args:
         base: Base profile to compile
         overlays: Optional list of overlay profiles (precedence order)
+        agent_loader: Optional agent loader (app injects search paths via this)
+                     If None, agents won't be loaded (profile.agents config ignored)
 
     Returns:
         Mount Plan dictionary suitable for AmplifierSession
@@ -508,7 +521,7 @@ body = parse_markdown_body(file_content)
 ### CLI Application (Full Features)
 
 ```python
-from amplifier_profiles import ProfileLoader, AgentLoader, compile_profile_to_mount_plan
+from amplifier_profiles import ProfileLoader, AgentLoader, AgentResolver, compile_profile_to_mount_plan
 from amplifier_collections import CollectionResolver
 from amplifier_app_cli.lib.mention_loading import MentionLoader
 from amplifier_core import AmplifierSession
@@ -535,9 +548,20 @@ profile_loader = ProfileLoader(
     mention_loader=mention_loader,
 )
 
-# Load and compile profile
+# Set up agent loader
+agent_resolver = AgentResolver(
+    search_paths=[
+        Path(__file__).parent / "data" / "agents",
+        Path.home() / ".amplifier" / "agents",
+        Path(".amplifier/agents"),
+    ],
+    collection_resolver=collection_resolver,
+)
+agent_loader = AgentLoader(resolver=agent_resolver, mention_loader=mention_loader)
+
+# Load and compile profile with agent loading
 profile = profile_loader.load_profile("dev")
-mount_plan = compile_profile_to_mount_plan(profile)
+mount_plan = compile_profile_to_mount_plan(profile, agent_loader=agent_loader)
 
 # Create session
 async with AmplifierSession(config=mount_plan) as session:
@@ -748,42 +772,30 @@ When designing systems, consider:
 
 ## Advanced Usage
 
-### Custom Profile Merging
+### Profile Compilation with Agent Loading
 
 ```python
-from amplifier_profiles import ProfileLoader
+from amplifier_profiles import ProfileLoader, AgentLoader, AgentResolver, compile_profile_to_mount_plan
 
-loader = ProfileLoader(search_paths=[...])
+# Set up profile loader
+profile_loader = ProfileLoader(search_paths=[...])
 
-# Load base and child separately
-parent = loader.load_profile("base")
-child = loader.load_profile("dev")
+# Set up agent loader with resolver
+agent_resolver = AgentResolver(search_paths=[...])
+agent_loader = AgentLoader(resolver=agent_resolver)
 
-# Custom merge logic
-merged = loader.merge_profiles(parent, child)
+# Load profile (inheritance resolved automatically)
+profile = profile_loader.load_profile("dev")
 
-# Compile merged profile
-mount_plan = compile_profile_to_mount_plan(merged)
-```
+# Compile with agent loading
+mount_plan = compile_profile_to_mount_plan(
+    base=profile,
+    agent_loader=agent_loader  # Enables agent loading from profile.agents config
+)
 
-### Inheritance Chain Inspection
-
-```python
-# Load profile
-profile = loader.load_profile("dev")
-
-# Inspect full inheritance chain
-chain = loader.resolve_inheritance(profile)
-
-print("Inheritance chain:")
-for p in chain:
-    print(f"  {p.profile.name} (v{p.profile.version})")
-
-# Output:
-# Inheritance chain:
-#   foundation (v1.0.0)
-#   base (v1.0.0)
-#   dev (v2.0.0)
+# Use with AmplifierSession
+async with AmplifierSession(config=mount_plan) as session:
+    response = await session.execute("task")
 ```
 
 ### Agent Discovery from Profile
