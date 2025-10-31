@@ -6,6 +6,16 @@ amplifier-profiles provides complete profile and agent lifecycle management: dis
 
 ---
 
+## Documentation
+
+- **[Quick Start](#quick-start)** - Get started in 5 minutes
+- **[API Reference](#api-reference)** - ProfileLoader, AgentLoader, compile_profile_to_mount_plan
+- **[Profile Authoring Guide](docs/PROFILE_AUTHORING.md)** - How to create custom profiles
+- **[Agent Authoring Guide](docs/AGENT_AUTHORING.md)** - How to create custom agents
+- **[System Design](docs/DESIGN.md)** - Architecture and design decisions
+
+---
+
 ## Installation
 
 ```bash
