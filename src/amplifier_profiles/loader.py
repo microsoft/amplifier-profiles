@@ -215,6 +215,111 @@ class ProfileLoader:
         except Exception as e:
             raise ProfileError(f"Invalid profile file {profile_file}: {e}") from e
 
+    def get_inheritance_chain(self, name: str) -> list[str]:
+        """
+        Get the inheritance chain for a profile.
+
+        Returns profile names from root to current (e.g., ['foundation:foundation', 'foundation:base', 'developer-expertise:dev']).
+
+        Args:
+            name: Profile name (simple or collection:profile format)
+
+        Returns:
+            List of profile names from root parent to current profile
+
+        Raises:
+            ProfileNotFoundError: If profile not found
+            ProfileError: If circular inheritance detected
+        """
+        chain = []
+        current_name = name
+        visited = set()
+
+        while current_name:
+            if current_name in visited:
+                raise ProfileError(f"Circular dependency detected: {' → '.join(chain)} → {current_name}")
+
+            visited.add(current_name)
+            chain.append(current_name)
+
+            profile_file = self.find_profile_file(current_name)
+            if not profile_file:
+                raise ProfileNotFoundError(f"Profile '{current_name}' not found in search paths")
+
+            try:
+                content = profile_file.read_text()
+                data, _ = parse_frontmatter(content)
+                current_name = data.get("profile", {}).get("extends")
+            except Exception as e:
+                raise ProfileError(f"Failed to read profile {profile_file}: {e}") from e
+
+        return list(
+            reversed(chain)
+        )  # Root first: ['foundation:foundation', 'foundation:base', 'developer-expertise:dev']
+
+    def load_inheritance_chain_profiles(self, name: str) -> list[Profile]:
+        """
+        Load each profile in the inheritance chain separately (not merged).
+
+        This is useful for displaying which profile contributed which modules.
+
+        Args:
+            name: Profile name (simple or collection:profile format)
+
+        Returns:
+            List of Profile objects from root to current (not merged with parents)
+
+        Raises:
+            ProfileNotFoundError: If profile not found
+            ProfileError: If circular inheritance or invalid profile
+        """
+        chain_names = self.get_inheritance_chain(name)
+        profiles = []
+
+        for profile_name in chain_names:
+            profile_file = self.find_profile_file(profile_name)
+            if not profile_file:
+                raise ProfileNotFoundError(f"Profile '{profile_name}' not found")
+
+            try:
+                content = profile_file.read_text()
+                data, _ = parse_frontmatter(content)
+                markdown_body = parse_markdown_body(content)
+
+                # Process @mentions if available
+                if markdown_body and self.mention_loader and self.mention_loader.has_mentions(markdown_body):
+                    context_messages = self.mention_loader.load_mentions(markdown_body, relative_to=profile_file.parent)
+                    if context_messages:
+                        context_parts = []
+                        for msg in context_messages:
+                            if isinstance(msg.content, str):
+                                context_parts.append(msg.content)
+                            elif isinstance(msg.content, list):
+                                context_parts.append(
+                                    "".join(
+                                        block.text if hasattr(block, "text") else str(block) for block in msg.content
+                                    )
+                                )
+                            else:
+                                context_parts.append(str(msg.content))
+                        context_content = "\n\n".join(context_parts)
+                        markdown_body = f"{context_content}\n\n{markdown_body}"
+
+                if markdown_body:
+                    if "system" not in data:
+                        data["system"] = {}
+                    if "instruction" not in data.get("system", {}):
+                        data["system"]["instruction"] = markdown_body
+
+                # Load THIS profile only (don't merge with parents)
+                profile = Profile(**data)
+                profiles.append(profile)
+
+            except Exception as e:
+                raise ProfileError(f"Invalid profile file {profile_file}: {e}") from e
+
+        return profiles
+
     def get_profile_source(self, name: str) -> str | None:
         """
         Determine which source a profile comes from.
@@ -269,9 +374,42 @@ class ProfileLoader:
         if not provider or not model_name:
             raise ProfileError(f"Invalid model pair: {model}")
 
+    def _merge_module_lists(self, parent_list: list, child_list: list) -> list:
+        """
+        Merge module lists (tools, providers, hooks) by module ID.
+
+        Strategy:
+        - Start with all parent modules
+        - Child modules with same ID override parent
+        - Child modules with new ID are appended
+
+        Result: Child inherits parent modules + can override specific ones + add new ones
+
+        Args:
+            parent_list: Parent module list
+            child_list: Child module list
+
+        Returns:
+            Merged module list
+        """
+        # Build dict keyed by module ID for deduplication
+        result_dict: dict[str, dict] = {}
+
+        # Add all parent modules
+        for item in parent_list:
+            if isinstance(item, dict) and "module" in item:
+                result_dict[item["module"]] = item
+
+        # Override/append child modules
+        for item in child_list:
+            if isinstance(item, dict) and "module" in item:
+                result_dict[item["module"]] = item  # Override parent or add new
+
+        return list(result_dict.values())
+
     def _deep_merge_dicts(self, parent: dict, child: dict) -> dict:
         """
-        Recursively merge dictionaries.
+        Recursively merge dictionaries with proper module list handling.
 
         Args:
             parent: Parent dictionary
@@ -289,8 +427,15 @@ class ProfileLoader:
             elif isinstance(value, dict) and key in result and isinstance(result[key], dict):
                 # Deep merge nested dicts
                 result[key] = self._deep_merge_dicts(result[key], value)
+            elif isinstance(value, list) and key in result and isinstance(result[key], list):
+                # Module lists get merged by module ID
+                if key in ("tools", "providers", "hooks"):
+                    result[key] = self._merge_module_lists(result[key], value)
+                else:
+                    # Other lists get replaced
+                    result[key] = value
             else:
-                # Replace value (including lists)
+                # Replace value
                 result[key] = value
 
         return result
