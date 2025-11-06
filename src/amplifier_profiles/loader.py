@@ -158,30 +158,12 @@ class ProfileLoader:
             data, _ = parse_frontmatter(content)  # Unpack tuple: (frontmatter_dict, body)
             markdown_body = parse_markdown_body(content)
 
-            # Process @mentions in markdown body if mention loader available
-            if markdown_body and self.mention_loader and self.mention_loader.has_mentions(markdown_body):
-                context_messages = self.mention_loader.load_mentions(markdown_body, relative_to=profile_file.parent)
+            # NOTE: @mention processing happens in app layer (_process_profile_mentions)
+            # Profile schema has no 'system' field, so any processing here would be lost.
+            # This keeps ProfileLoader focused on YAML/module config loading only.
 
-                # Prepend loaded context to markdown body
-                if context_messages:
-                    context_parts = []
-                    for msg in context_messages:
-                        if isinstance(msg.content, str):
-                            context_parts.append(msg.content)
-                        elif isinstance(msg.content, list):
-                            context_parts.append(
-                                "".join(
-                                    block.text if hasattr(block, "text") else str(block)  # type: ignore[attr-defined]
-                                    for block in msg.content
-                                )
-                            )
-                        else:
-                            context_parts.append(str(msg.content))
-
-                    context_content = "\n\n".join(context_parts)
-                    markdown_body = f"{context_content}\n\n{markdown_body}"
-
-            # Add markdown body as system instruction if present and not already defined
+            # Store raw markdown in data for app layer to process
+            # (Profile schema will drop this, but it's needed for documentation)
             if markdown_body:
                 if "system" not in data:
                     data["system"] = {}
@@ -286,25 +268,9 @@ class ProfileLoader:
                 data, _ = parse_frontmatter(content)
                 markdown_body = parse_markdown_body(content)
 
-                # Process @mentions if available
-                if markdown_body and self.mention_loader and self.mention_loader.has_mentions(markdown_body):
-                    context_messages = self.mention_loader.load_mentions(markdown_body, relative_to=profile_file.parent)
-                    if context_messages:
-                        context_parts = []
-                        for msg in context_messages:
-                            if isinstance(msg.content, str):
-                                context_parts.append(msg.content)
-                            elif isinstance(msg.content, list):
-                                context_parts.append(
-                                    "".join(
-                                        block.text if hasattr(block, "text") else str(block) for block in msg.content
-                                    )
-                                )
-                            else:
-                                context_parts.append(str(msg.content))
-                        context_content = "\n\n".join(context_parts)
-                        markdown_body = f"{context_content}\n\n{markdown_body}"
-
+                # NOTE: @mention processing happens in app layer (_process_profile_mentions)
+                # Profile schema has no 'system' field, so processing here would be dropped.
+                # Store raw markdown for documentation/display purposes only.
                 if markdown_body:
                     if "system" not in data:
                         data["system"] = {}
