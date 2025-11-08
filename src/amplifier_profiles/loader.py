@@ -1,6 +1,7 @@
 """Profile loader for discovering and loading profile files."""
 
 from pathlib import Path
+from typing import Any
 
 from amplifier_collections import extract_collection_name_from_path
 
@@ -241,27 +242,36 @@ class ProfileLoader:
 
     def load_inheritance_chain_profiles(self, name: str) -> list[Profile]:
         """
-        Load each profile in the inheritance chain separately (not merged).
+        Load and merge the complete inheritance chain, validating only the final result.
 
-        This is useful for displaying which profile contributed which modules.
+        This allows child profiles to be partial - they only need to specify what differs
+        from parent profiles. Validation happens after merging the complete chain.
 
         Args:
             name: Profile name (simple or collection:profile format)
 
         Returns:
-            List of Profile objects from root to current (not merged with parents)
+            List containing single merged Profile object
 
         Raises:
             ProfileNotFoundError: If profile not found
-            ProfileError: If circular inheritance or invalid profile
+            ProfileError: If circular inheritance or invalid merged profile
         """
-        chain_names = self.get_inheritance_chain(name)
-        profiles = []
+        from pydantic import ValidationError
 
+        from amplifier_profiles.merger import merge_profile_dicts
+
+        chain_names = self.get_inheritance_chain(name)
+        profile_dicts = []
+        profile_files = []
+
+        # Step 1: Load all profiles as dictionaries (no validation yet)
         for profile_name in chain_names:
             profile_file = self.find_profile_file(profile_name)
             if not profile_file:
                 raise ProfileNotFoundError(f"Profile '{profile_name}' not found")
+
+            profile_files.append(profile_file)
 
             try:
                 content = profile_file.read_text()
@@ -277,14 +287,123 @@ class ProfileLoader:
                     if "instruction" not in data.get("system", {}):
                         data["system"]["instruction"] = markdown_body
 
-                # Load THIS profile only (don't merge with parents)
-                profile = Profile(**data)
-                profiles.append(profile)
+                profile_dicts.append(data)
 
             except Exception as e:
-                raise ProfileError(f"Invalid profile file {profile_file}: {e}") from e
+                raise ProfileError(f"Failed to load profile file {profile_file}: {e}") from e
 
-        return profiles
+        # Step 2: Merge all profiles from parent to child
+        merged = {}
+        for profile_dict in profile_dicts:
+            merged = merge_profile_dicts(merged, profile_dict)
+
+        # Step 3: Validate merged result
+        try:
+            final_profile = Profile(**merged)
+        except ValidationError as e:
+            # Enhanced error message with full context
+            error_msg = self._format_validation_error(e, chain_names, profile_files)
+            raise ProfileError(error_msg) from e
+
+        return [final_profile]
+
+    def load_inheritance_chain_dicts(self, name: str) -> list[dict[str, Any]]:
+        """
+        Load inheritance chain as raw dictionaries for provenance tracking.
+
+        This method loads each profile in the chain as a dictionary without validation
+        or merging. It's useful for display purposes where you want to show which
+        profile contributed which values.
+
+        Args:
+            name: Profile name (simple or collection:profile format)
+
+        Returns:
+            List of profile dictionaries from root to leaf (unvalidated, unmerged)
+
+        Raises:
+            ProfileNotFoundError: If profile not found
+            ProfileError: If profile file cannot be loaded
+
+        Example:
+            >>> loader = ProfileLoader(...)
+            >>> dicts = loader.load_inheritance_chain_dicts("dev")
+            >>> # dicts[0] = foundation (raw dict)
+            >>> # dicts[1] = base (raw dict)
+            >>> # dicts[2] = dev (raw dict)
+        """
+        chain_names = self.get_inheritance_chain(name)
+        profile_dicts = []
+
+        for profile_name in chain_names:
+            profile_file = self.find_profile_file(profile_name)
+            if not profile_file:
+                raise ProfileNotFoundError(f"Profile '{profile_name}' not found")
+
+            try:
+                content = profile_file.read_text()
+                data, _ = parse_frontmatter(content)
+                markdown_body = parse_markdown_body(content)
+
+                # Add profile name to dict for display purposes
+                if "profile" in data and "name" not in data["profile"]:
+                    data["profile"]["name"] = profile_name
+
+                # Store markdown for display
+                if markdown_body:
+                    if "system" not in data:
+                        data["system"] = {}
+                    if "instruction" not in data.get("system", {}):
+                        data["system"]["instruction"] = markdown_body
+
+                profile_dicts.append(data)
+
+            except Exception as e:
+                raise ProfileError(f"Failed to load profile file {profile_file}: {e}") from e
+
+        return profile_dicts
+
+    def _format_validation_error(self, error: Any, chain_names: list[str], profile_files: list[Path]) -> str:
+        """
+        Format Pydantic validation errors with helpful context.
+
+        Args:
+            error: Pydantic validation error
+            chain_names: Profile inheritance chain names
+            profile_files: Profile file paths
+
+        Returns:
+            Formatted error message with suggestions
+        """
+        errors = []
+        for err in error.errors():
+            loc = ".".join(str(x) for x in err["loc"])
+            msg = err["msg"]
+            type_ = err["type"]
+
+            if type_ == "missing":
+                errors.append(f"  • Missing required field: {loc}")
+            elif type_ == "type_error":
+                errors.append(f"  • Wrong type for {loc}: {msg}")
+            else:
+                errors.append(f"  • {loc}: {msg}")
+
+        chain_display = " → ".join(chain_names)
+        error_list = "\n".join(errors)
+
+        return (
+            f"Merged profile is incomplete after inheritance\n\n"
+            f"Inheritance chain: {chain_display}\n\n"
+            f"Validation errors:\n{error_list}\n\n"
+            f"This usually means:\n"
+            f"  - Base profile doesn't define all required fields\n"
+            f"  - Or fields were accidentally removed during inheritance\n\n"
+            f"Suggestions:\n"
+            f"  1. Check base profiles have complete session/providers configuration\n"
+            f"  2. Verify module sources are defined in root or parent profiles\n"
+            f"  3. See docs/PROFILE_AUTHORING.md for examples\n\n"
+            f"Profile location: {profile_files[-1]}"
+        )
 
     def get_profile_source(self, name: str) -> str | None:
         """

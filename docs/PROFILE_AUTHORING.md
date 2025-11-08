@@ -193,7 +193,7 @@ Project-specific context:
 
 ### Profile Inheritance
 
-Profiles support single inheritance via `extends`:
+Profiles support single inheritance via `extends`. Child profiles can be **partial** - they only need to specify what differs from the parent.
 
 ```yaml
 profile:
@@ -203,17 +203,78 @@ profile:
   extends: dev # Inherit all settings from dev profile
 ```
 
-**Inheritance rules:**
+**How merging works:**
 
-- Child settings override parent settings
-- Lists are replaced entirely (not merged)
-- Objects are deep-merged
+The loader merges the entire inheritance chain (parent → child) **before validation**. This means:
+
+1. **Child profiles can be partial** - Required fields can be inherited from parent
+2. **Module lists are deep-merged by module ID** - Hooks, tools, providers
+3. **Config dictionaries are deep-merged** - You can override just specific config keys
+4. **Sources are inherited** - No need to repeat git URLs in child profiles
+5. **Scalars override** - Simple values in child replace parent values
+
+**Merge behavior by section:**
+
+```yaml
+# Lists (hooks, tools, providers): Merge by module ID
+# Parent:
+hooks:
+  - module: hooks-status-context
+    source: git+https://github.com/.../hooks-status-context@main
+    config:
+      include_datetime: true
+
+# Child (can be partial!):
+hooks:
+  - module: hooks-status-context
+    config:
+      git_include_commits: 3  # Add/override just this key
+
+# Merged result:
+hooks:
+  - module: hooks-status-context
+    source: git+https://github.com/.../hooks-status-context@main  # Inherited!
+    config:
+      include_datetime: true      # From parent
+      git_include_commits: 3      # From child
+
+# Dicts (session, ui): Recursive deep merge
+# Parent:
+session:
+  orchestrator:
+    module: loop-streaming
+    source: git+https://...
+    config:
+      extended_thinking: true
+
+# Child (partial!):
+session:
+  orchestrator:
+    config:
+      max_iterations: 10  # Just add this
+
+# Merged:
+session:
+  orchestrator:
+    module: loop-streaming          # Inherited
+    source: git+https://...         # Inherited
+    config:
+      extended_thinking: true       # Inherited
+      max_iterations: 10            # Added
+```
 
 **Standard inheritance chain:**
 
 ```
 foundation → base → dev → your-custom-profile
 ```
+
+**Key benefits:**
+
+- ✅ Less duplication - focus on what's different
+- ✅ Inherit sources automatically - no repeated git URLs
+- ✅ Cleaner, more maintainable profiles
+- ✅ Deep config customization - override just what you need
 
 ### Module Configuration
 

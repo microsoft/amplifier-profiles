@@ -5,19 +5,9 @@ requires-python = ">=3.11"
 [[package]]
 name = "amplifier-collections"
 version = "0.1.0"
-source = { directory = "../amplifier-collections" }
+source = { git = "https://github.com/microsoft/amplifier-collections?branch=main#20c290af2d5f283cc957fb9480daec602fd25998" }
 dependencies = [
     { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23.0" },
-    { name = "pytest-cov", specifier = ">=4.1.0" },
 ]
 
 [[package]]
@@ -37,7 +27,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "amplifier-collections", directory = "../amplifier-collections" },
+    { name = "amplifier-collections", git = "https://github.com/microsoft/amplifier-collections?branch=main" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
