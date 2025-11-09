@@ -11,6 +11,10 @@ from .exceptions import AgentNotFoundError
 from .exceptions import ProfileError
 from .exceptions import ProfileNotFoundError
 from .loader import ProfileLoader
+from .merger import merge_dicts
+from .merger import merge_module_items
+from .merger import merge_module_lists
+from .merger import merge_profile_dicts
 from .protocols import CollectionResolverProtocol
 from .protocols import MentionLoaderProtocol
 from .schema import AgentsConfig
@@ -26,6 +30,11 @@ __all__ = [
     "AgentResolver",
     # Compilation
     "compile_profile_to_mount_plan",
+    # Merging utilities
+    "merge_profile_dicts",
+    "merge_module_lists",
+    "merge_module_items",
+    "merge_dicts",
     # Schemas
     "Profile",
     "ProfileMetadata",

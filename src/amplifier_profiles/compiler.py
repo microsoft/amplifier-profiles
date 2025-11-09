@@ -4,6 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 from typing import Any
 
+from .merger import merge_module_items
 from .schema import Profile
 
 if TYPE_CHECKING:
@@ -165,6 +166,9 @@ def _merge_module_list(base_modules: list[dict[str, Any]], overlay_modules: list
     """
     Merge two module lists, with overlay modules overriding base modules.
 
+    Delegates to canonical merger.merge_module_items for DRY compliance.
+    See merger.py for complete merge strategy documentation.
+
     Args:
         base_modules: Existing module list (already in dict format)
         overlay_modules: Overlay module list (ModuleConfig objects)
@@ -175,26 +179,32 @@ def _merge_module_list(base_modules: list[dict[str, Any]], overlay_modules: list
     # Convert overlay modules to dict format
     overlay_dicts = [m.to_dict() for m in overlay_modules]
 
-    # Create dicts by ID for easy lookup
-    base_by_id = {m["module"]: m for m in base_modules}
-    overlay_by_id = {m["module"]: m for m in overlay_dicts}
+    # Build dict by ID for efficient lookup
+    result_dict: dict[str, dict[str, Any]] = {}
 
-    # Merge: start with base modules, override with overlay modules
-    merged = base_by_id.copy()
-    merged.update(overlay_by_id)
-
-    # Return as list, preserving order
-    result = []
-
-    # Add base modules (potentially overridden)
+    # Add all base modules
     for base_module in base_modules:
         module_id = base_module["module"]
-        result.append(merged[module_id])
+        result_dict[module_id] = base_module
+
+    # Merge or add overlay modules
+    for overlay_module in overlay_dicts:
+        module_id = overlay_module["module"]
+        if module_id in result_dict:
+            # Module exists in base - deep merge using canonical function
+            result_dict[module_id] = merge_module_items(result_dict[module_id], overlay_module)
+        else:
+            # New module in overlay - add it
+            result_dict[module_id] = overlay_module
+
+    # Return as list, preserving base order + new overlays
+    result = []
+    for base_module in base_modules:
+        result.append(result_dict[base_module["module"]])
 
     # Add new overlay modules (not in base)
     for overlay_module in overlay_dicts:
-        module_id = overlay_module["module"]
-        if module_id not in base_by_id:
+        if overlay_module["module"] not in {m["module"] for m in base_modules}:
             result.append(overlay_module)
 
     return result

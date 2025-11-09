@@ -7,6 +7,7 @@ from amplifier_collections import extract_collection_name_from_path
 
 from .exceptions import ProfileError
 from .exceptions import ProfileNotFoundError
+from .merger import merge_module_lists
 from .protocols import CollectionResolverProtocol
 from .protocols import MentionLoaderProtocol
 from .schema import Profile
@@ -463,12 +464,8 @@ class ProfileLoader:
         """
         Merge module lists (tools, providers, hooks) by module ID.
 
-        Strategy:
-        - Start with all parent modules
-        - Child modules with same ID override parent
-        - Child modules with new ID are appended
-
-        Result: Child inherits parent modules + can override specific ones + add new ones
+        Delegates to canonical merger.merge_module_lists for DRY compliance.
+        See merger.py for complete merge strategy documentation.
 
         Args:
             parent_list: Parent module list
@@ -477,20 +474,7 @@ class ProfileLoader:
         Returns:
             Merged module list
         """
-        # Build dict keyed by module ID for deduplication
-        result_dict: dict[str, dict] = {}
-
-        # Add all parent modules
-        for item in parent_list:
-            if isinstance(item, dict) and "module" in item:
-                result_dict[item["module"]] = item
-
-        # Override/append child modules
-        for item in child_list:
-            if isinstance(item, dict) and "module" in item:
-                result_dict[item["module"]] = item  # Override parent or add new
-
-        return list(result_dict.values())
+        return merge_module_lists(parent_list, child_list)
 
     def _deep_merge_dicts(self, parent: dict, child: dict) -> dict:
         """
