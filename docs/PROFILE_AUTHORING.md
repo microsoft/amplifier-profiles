@@ -251,7 +251,7 @@ session:
 session:
   orchestrator:
     config:
-      max_iterations: 10  # Just add this
+      max_iterations: 10  # Limit to 10 iterations (-1 = unlimited, default)
 
 # Merged:
 session:
@@ -260,7 +260,7 @@ session:
     source: git+https://...         # Inherited
     config:
       extended_thinking: true       # Inherited
-      max_iterations: 10            # Added
+      max_iterations: 10            # Added (-1 = unlimited, default)
 ```
 
 **Standard inheritance chain:**
