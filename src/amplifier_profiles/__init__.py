@@ -7,6 +7,7 @@ from .agent_schema import AgentMeta
 from .agent_schema import AgentTools
 from .agent_schema import SystemConfig
 from .compiler import compile_profile_to_mount_plan
+from .exceptions import AgentError
 from .exceptions import AgentNotFoundError
 from .exceptions import ProfileError
 from .exceptions import ProfileNotFoundError
@@ -22,6 +23,8 @@ from .schema import ModuleConfig
 from .schema import Profile
 from .schema import ProfileMetadata
 from .schema import SessionConfig
+from .utils import parse_frontmatter
+from .utils import parse_markdown_body
 
 __all__ = [
     # Core loading
@@ -35,6 +38,9 @@ __all__ = [
     "merge_module_lists",
     "merge_module_items",
     "merge_dicts",
+    # Parsing utilities
+    "parse_frontmatter",
+    "parse_markdown_body",
     # Schemas
     "Profile",
     "ProfileMetadata",
@@ -51,6 +57,7 @@ __all__ = [
     # Exceptions
     "ProfileError",
     "ProfileNotFoundError",
+    "AgentError",
     "AgentNotFoundError",
 ]
 

@@ -199,14 +199,25 @@ hooks:
 Multiple profiles with same name across search paths become overlays:
 
 ```
-~/.amplifier/profiles/dev.md          # Lowest precedence
-.amplifier/profiles/dev.md            # Higher (project override)
+┌──────────────────────────────────────────────────────────┐
+│ 3. PROJECT (highest precedence)                          │
+│    .amplifier/profiles/dev.md                            │
+│    → Workspace-specific, overrides user and bundled      │
+├──────────────────────────────────────────────────────────┤
+│ 2. USER                                                   │
+│    ~/.amplifier/profiles/dev.md                          │
+│    → User-global, overrides bundled                      │
+├──────────────────────────────────────────────────────────┤
+│ 1. BUNDLED (lowest precedence)                           │
+│    <app>/data/profiles/dev.md                            │
+│    → Application-provided defaults                       │
+└──────────────────────────────────────────────────────────┘
 ```
 
 **Resolution process**:
 1. Find all files named "dev.md" across search paths
-2. Load each profile
-3. Merge in precedence order (lowest to highest)
+2. Load each profile (bundled, then user, then project)
+3. Merge in precedence order (bundled → user → project)
 
 **Use case**: Project customizes user-global profile without duplicating entire configuration.
 
@@ -510,7 +521,49 @@ def compile_profile_to_mount_plan(
 }
 ```
 
-### Utilities
+### Merging Utilities
+
+**CANONICAL** merge functions exported for DRY across ecosystem (used by amplifier-config and others):
+
+```python
+from amplifier_profiles import (
+    merge_profile_dicts,
+    merge_module_lists,
+    merge_module_items,
+    merge_dicts
+)
+
+# Deep merge parent and child profile dictionaries
+merged = merge_profile_dicts(parent_dict, child_dict)
+# Module lists merged by module ID, configs deep-merged, sources inherited
+
+# Merge module lists by module ID
+merged_modules = merge_module_lists(
+    parent=[{"module": "A", "source": "git+...", "config": {"x": 1}}],
+    child=[{"module": "A", "config": {"y": 2}}]
+)
+# Result: [{"module": "A", "source": "git+...", "config": {"x": 1, "y": 2}}]
+
+# Deep merge individual module items
+merged_module = merge_module_items(
+    parent={"module": "A", "source": "git+...", "config": {"x": 1}},
+    child={"module": "A", "config": {"y": 2}}
+)
+# Result: {"module": "A", "source": "git+...", "config": {"x": 1, "y": 2}}
+
+# Generic recursive dict merge
+merged_dict = merge_dicts(
+    parent={"a": 1, "nested": {"b": 2}},
+    child={"c": 3, "nested": {"d": 4}}
+)
+# Result: {"a": 1, "c": 3, "nested": {"b": 2, "d": 4}}
+```
+
+**Key behavior**: Child values override parent for scalars, merge for dicts, merge by ID for module lists.
+
+**Purpose**: These functions are the **single source of truth** for merge semantics across the Amplifier ecosystem. Other libraries (like amplifier-config) import and use these for consistent merge behavior.
+
+### Parsing Utilities
 
 ```python
 from amplifier_profiles import parse_frontmatter, parse_markdown_body
@@ -853,22 +906,51 @@ async with AmplifierSession(config=mount_plan) as session:
 ### Exceptions
 
 ```python
-from amplifier_profiles import ProfileError, AgentError
+from amplifier_profiles import (
+    ProfileError,
+    ProfileNotFoundError,
+    AgentError,
+    AgentNotFoundError
+)
 
-# Profile errors
+# Profile errors (base exception)
 try:
     profile = loader.load_profile("nonexistent")
 except ProfileError as e:
     print(f"Error: {e.message}")
     print(f"Searched: {e.context.get('search_paths')}")
 
-# Agent errors
+# Profile not found (specific)
+try:
+    profile = loader.load_profile("missing")
+except ProfileNotFoundError as e:
+    # Inherits from ProfileError
+    print(f"Profile not found: {e.message}")
+    print(f"Context: {e.context}")
+
+# Agent errors (base exception)
 try:
     agent = agent_loader.load_agent("unknown")
 except AgentError as e:
     print(f"Error: {e.message}")
     print(f"Context: {e.context}")
+
+# Agent not found (specific)
+try:
+    agent = agent_loader.load_agent("missing")
+except AgentNotFoundError as e:
+    # Inherits from AgentError
+    print(f"Agent not found: {e.message}")
+    print(f"Context: {e.context}")
 ```
+
+**Exception Hierarchy**:
+- `ProfileError` - Base exception for all profile errors (with context dict)
+  - `ProfileNotFoundError` - Profile not found in search paths
+- `AgentError` - Base exception for all agent errors (with context dict)
+  - `AgentNotFoundError` - Agent not found in search paths
+
+**All exceptions** include `.message` and `.context` dict for debugging.
 
 ### Validation Errors
 
@@ -1091,30 +1173,6 @@ Target coverage: >90%
 - No profile templates/generators
 - No profile transformation DSL
 - No elaborate validation framework
-
----
-
-## Future Enhancements
-
-**Only add when proven needed through real usage**:
-
-### Profile Validation API
-- **Add when**: Users request validation separate from compilation
-- **Add how**: `validate_profile(profile: Profile) -> list[ValidationError]`
-
-### Profile Builder Pattern
-- **Add when**: Apps request programmatic profile construction
-- **Add how**: Builder API for profile creation
-
-### Caching Layer
-- **Add when**: Performance profiling shows loading bottleneck
-- **Add how**: LRU cache with path-based invalidation
-
-### Profile Transformation
-- **Add when**: Apps request profile manipulation beyond loading
-- **Add how**: Transform functions or builder pattern
-
-**Current approach**: YAGNI - ship minimal, grow based on evidence.
 
 ---
 

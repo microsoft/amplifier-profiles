@@ -141,69 +141,31 @@ agents:
       description: "Additional inline agent"
 ```
 
-## Directory Structure
+## Search Path Mechanism
 
-Profiles are discovered from multiple locations with increasing precedence. Higher priority locations override lower ones.
-
-### Search Path (Lowest to Highest Priority)
+**ProfileLoader** discovers profiles from multiple search paths using first-match-wins precedence. Applications inject search paths as policy:
 
 ```
-1. Bundled Profiles (amplifier-app-cli package)
-   amplifier_app_cli/data/profiles/
-   ├── foundation.md
-   ├── base.md
-   ├── dev.md
-   ├── production.md
-   ├── test.md
-   └── full.md
-
-2. Project Profiles
-   .amplifier/profiles/
-   └── team-standards.md
-
-3. User Profiles
-   ~/.amplifier/profiles/
-   └── my-custom.md
-
-4. Environment Variables (highest priority)
-   AMPLIFIER_PROFILE_<NAME>=/path/to/profile.md
+┌──────────────────────────────────────────────────────────┐
+│ HIGHER PRECEDENCE (later in search_paths list)           │
+│    First match wins from highest precedence path         │
+├──────────────────────────────────────────────────────────┤
+│ Application-defined paths (examples):                     │
+│   • Project-local: .amplifier/profiles/                  │
+│   • User-global: ~/.amplifier/profiles/                  │
+│   • App-bundled: <app>/data/profiles/                    │
+├──────────────────────────────────────────────────────────┤
+│ LOWER PRECEDENCE (earlier in search_paths list)          │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### Bundled Profiles
+**Library mechanism**: Accepts any list of Path objects, searches in order, returns first match.
 
-Included with the `amplifier-app-cli` package:
+**Application policy**: Decides which paths to search and in what order.
 
-- Shipped with installation (uv, pip, etc.)
-- Default configurations maintained by Amplifier team
-- Located in package data directory
-- Lowest priority - easily overridden
+**Typical pattern**: Applications provide 2-4 search paths representing system defaults, user customization, and project-specific overrides.
 
-### Project Profiles
-
-Located in `.amplifier/profiles/` within a project:
-
-- Project-specific configurations
-- Shared via version control
-- Project-wide standards and conventions
-- Override bundled defaults for the project
-- Can extend any bundled profile
-
-### User Profiles
-
-Located in `~/.amplifier/profiles/`:
-
-- Personal configurations
-- Per-user customizations
-- Override both bundled and project profiles
-- Not committed to version control
-
-### Environment Variables
-
-Temporary overrides for testing:
-
-- `AMPLIFIER_PROFILE_<NAME>=/path/to/profile.md`
-- Highest priority - overrides all search paths
-- Useful for testing profile changes before committing
+**See your application's documentation** (e.g., amplifier-app-cli) for specific path conventions and environment variable support.
 
 ## Profile Resolution
 
@@ -304,142 +266,45 @@ providers:
 
 ### 4. Further Merging
 
-After profile compilation, the Mount Plan can be further merged with:
+After profile compilation, the Mount Plan can be further merged with application-specific configurations. Applications (like amplifier-app-cli) typically merge:
 
-- User settings (`~/.amplifier/settings.yaml`)
-- Project settings (`.amplifier/settings.yaml`)
-- Local settings (`.amplifier/settings.local.yaml`)
-- `--config` file flag
+- User settings files
+- Project settings files
 - CLI option overrides
 - Environment variables
 
-## CLI Commands
-
-### List Profiles
-
-```bash
-amplifier profile list
-```
-
-Shows all available profiles from all sources:
-
-```
-Available Profiles
-┏━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Name       ┃ Source   ┃ Description                  ┃
-┡━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ foundation │ bundled  │ Absolute minimum foundation  │
-│ base       │ bundled  │ Core tools and hooks         │
-│ dev        │ bundled  │ Development profile          │
-│ production │ bundled  │ Production profile           │
-│ test       │ bundled  │ Testing profile              │
-│ full       │ bundled  │ All features profile         │
-│ my-custom  │ user     │ My custom configuration      │
-└────────────┴──────────┴──────────────────────────────┘
-```
-
-### Show Profile
-
-```bash
-amplifier profile show dev
-```
-
-Displays:
-
-1. The profile YAML frontmatter and content
-2. The compiled Mount Plan (after inheritance and overlays)
-
-Useful for understanding what a profile actually does.
-
-### Use Profile
-
-```bash
-amplifier profile use dev
-```
-
-Sets the active profile:
-
-- Writes profile name to `.amplifier/settings.local.yaml` by default
-- All subsequent `amplifier run` commands use this profile
-- Can be overridden with `--profile` flag
-- Supports scope flags: `--local` (default), `--project`, `--global`
-
-```bash
-# Set for just you
-amplifier profile use dev --local
-
-# Set for whole project
-amplifier profile use production --project
-
-# Set globally for all projects
-amplifier profile use base --global
-```
-
-### Current Profile
-
-```bash
-amplifier profile current
-```
-
-Shows the active profile and where it's configured from:
-
-- Displays profile name and source (local/project/user/system default)
-- Shows resolution chain if overrides exist
-
-### Validate Profile
-
-```bash
-amplifier profile validate my-profile.md
-```
-
-Checks if a profile file is valid:
-
-- Schema validation
-- Module ID references are resolvable
-- Inheritance chains are valid
-- No circular dependencies
+**This merging is app policy**, not library responsibility. See individual application documentation for details.
 
 ## Using Profiles
-
-### In Command Line
-
-**With active profile:**
-
-```bash
-# Set once
-amplifier profile use dev
-
-# Use implicitly
-amplifier run "Write a hello world program"
-```
-
-**One-time override:**
-
-```bash
-amplifier run --profile production "Deploy to production"
-```
 
 ### In Python Code
 
 ```python
-from amplifier_app_cli.profiles import ProfileLoader, compile_profile_to_mount_plan
-from amplifier_core import AmplifierSession, ModuleLoader
+from amplifier_profiles import ProfileLoader, compile_profile_to_mount_plan
+from amplifier_core import AmplifierSession
+from pathlib import Path
 
-# Load and compile profile
-loader = ProfileLoader()
+# Create loader with search paths
+loader = ProfileLoader(
+    search_paths=[
+        Path("data/profiles"),           # Application bundled
+        Path.home() / ".amplifier/profiles",  # User global
+        Path(".amplifier/profiles"),      # Project local
+    ]
+)
+
+# Load profile (overlay merging automatic)
 profile = loader.load_profile("dev")
-overlays = loader.load_overlays("dev")
-mount_plan = compile_profile_to_mount_plan(profile, overlays)
 
-# Create session
-module_loader = ModuleLoader()
-session = AmplifierSession(mount_plan, loader=module_loader)
+# Compile to Mount Plan
+mount_plan = compile_profile_to_mount_plan(profile)
 
-# Use session
-await session.initialize()
-response = await session.execute("Hello!")
-await session.cleanup()
+# Use with AmplifierSession
+async with AmplifierSession(config=mount_plan) as session:
+    response = await session.execute("Hello, Amplifier!")
 ```
+
+**CLI usage**: For command-line usage examples, see your application's documentation (e.g., amplifier-app-cli).
 
 ## Creating Custom Profiles
 
@@ -737,40 +602,16 @@ See the bundled profiles in `amplifier_app_cli/data/profiles/` for reference:
 
 These profiles ship with the package and serve as templates for your own profiles.
 
-### Migration from Config Files
-
-**Old style** (direct config file):
-
-```markdown
-# old-config.md
----
-session:
-  orchestrator: loop-basic
-  context: context-simple
-  # ...
----
-```
-
-**New style** (using profiles):
-
-```bash
-# Use a bundled profile
-amplifier profile use foundation
-
-# Or create a custom profile
-amplifier profile create my-foundation --extend foundation
-# Edit ~/.amplifier/profiles/my-foundation.md
-amplifier profile use my-foundation
-```
-
 ## Related Documentation
 
-**For Users:**
-- [PROFILE_AUTHORING.md](PROFILE_AUTHORING.md) - User-friendly guide to creating profiles
-- [USER_ONBOARDING.md#quick-reference](USER_ONBOARDING.md#quick-reference) - Complete configuration reference
-- [USER_ONBOARDING.md](USER_ONBOARDING.md) - Getting started with profiles
+**Within This Library:**
+- [PROFILE_AUTHORING.md](PROFILE_AUTHORING.md) - User guide for creating profiles
+- [AGENT_AUTHORING.md](AGENT_AUTHORING.md) - User guide for creating agents
+- [Main README](../README.md) - Complete API reference
 
-**For Developers:**
-- Mount Plan Specification: `amplifier-core/docs/MOUNT_PLAN_SPECIFICATION.md`
-- [MODULE_DEVELOPMENT.md](MODULE_DEVELOPMENT.md) - Creating modules
-- CLI Reference: `docs/CLI_REFERENCE.md`
+**External Dependencies:**
+- [amplifier-core](https://github.com/microsoft/amplifier-core) - Kernel mechanisms and Mount Plan specification
+- [amplifier-collections](https://github.com/microsoft/amplifier-collections) - Collection system for collection:name syntax
+
+**For Application Users:**
+See your application's documentation (e.g., amplifier-app-cli) for CLI commands, search paths, and environment variables.

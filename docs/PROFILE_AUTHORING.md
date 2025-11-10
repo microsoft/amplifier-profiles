@@ -653,4 +653,4 @@ Amplifier profiles provide powerful, composable configuration:
 
 Start with bundled profiles (`foundation`, `base`, `dev`, `production`) and extend them for your specific needs.
 
-**For complete schema specification**, see the amplifier-profiles library README (coming soon).
+**For complete schema specification**, see the [amplifier-profiles README](../README.md#schemas).
