@@ -198,6 +198,51 @@ You write clear documentation.
 
 **Inherits from parent**: providers, hooks, orchestrator, context, all session config
 
+### How Agent Configs Merge with Parent
+
+Agent configurations merge with parent session configs using **deep recursive merging with module-list-by-ID**:
+
+**Merge Rules:**
+- **Module lists** (providers, tools, hooks) merge by module ID (not replaced entirely)
+- **Config dicts** merge recursively (child keys override parent keys)
+- **Sources inherit** - if parent has module source, agent doesn't need to repeat it
+- **Scalar values** override (child replaces parent)
+
+**Example: Module List Merging by ID**
+
+```yaml
+# Parent session has:
+providers:
+  - module: provider-anthropic
+    source: git+https://github.com/.../provider-anthropic@main
+    config:
+      model: claude-sonnet-4-5
+      temperature: 0.7
+
+# Agent specifies:
+providers:
+  - module: provider-anthropic  # Matches by module ID
+    config:
+      temperature: 0.3  # Override just temperature
+
+# Result after merge:
+providers:
+  - module: provider-anthropic
+    source: git+https://github.com/.../provider-anthropic@main  # Inherited!
+    config:
+      model: claude-sonnet-4-5      # Inherited
+      temperature: 0.3               # Overridden
+```
+
+**Key Benefits:**
+- **DRY** - Don't repeat sources in every agent
+- **Partial overrides** - Change just what you need (like temperature)
+- **Deep config merging** - Nested config keys merge recursively
+
+**Same merge logic as profiles** - Agents use the same deep merge implementation as profile inheritance, ensuring consistent behavior throughout the system.
+
+**Implementation**: Uses `amplifier_profiles.merger.merge_profile_dicts()` for all configuration merging.
+
 ### Tool Subsets
 
 **Omit tools** → Inherit all parent tools (general purpose):
