@@ -38,12 +38,13 @@ class AgentLoader:
             return []
         return self.resolver.list_agents()
 
-    def load_agent(self, name: str) -> Agent:
+    def load_agent(self, name: str, deduplicator=None) -> Agent:
         """
         Load an agent configuration from file.
 
         Args:
             name: Agent name (without .md extension)
+            deduplicator: Optional session-wide ContentDeduplicator for @mention deduplication
 
         Returns:
             Loaded and validated agent
@@ -67,7 +68,9 @@ class AgentLoader:
 
             # Process @mentions in markdown body if mention loader available
             if markdown_body and self.mention_loader and self.mention_loader.has_mentions(markdown_body):
-                context_messages = self.mention_loader.load_mentions(markdown_body, relative_to=agent_file.parent)
+                context_messages = self.mention_loader.load_mentions(
+                    markdown_body, relative_to=agent_file.parent, deduplicator=deduplicator
+                )
 
                 # Prepend loaded context to markdown body
                 if context_messages:
