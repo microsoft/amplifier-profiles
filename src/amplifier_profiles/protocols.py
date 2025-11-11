@@ -68,13 +68,14 @@ class MentionLoaderProtocol(Protocol):
         ...
 
     def load_mentions(
-        self, text: str, relative_to: Path | None = None
+        self, text: str, relative_to: Path | None = None, deduplicator: Any | None = None
     ) -> list[Any]:  # Returns list[Message] but we avoid importing Message here
         """Load files referenced in text via @mention syntax.
 
         Args:
             text: Text containing @mention patterns
             relative_to: Optional base path for relative references
+            deduplicator: Optional session-wide ContentDeduplicator for cross-call deduplication
 
         Returns:
             List of Message objects with loaded content
