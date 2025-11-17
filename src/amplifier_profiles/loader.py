@@ -156,7 +156,7 @@ class ProfileLoader:
 
         try:
             # Read file content (parse functions expect str, not Path)
-            content = profile_file.read_text()
+            content = profile_file.read_text(encoding='utf-8')
             data, _ = parse_frontmatter(content)  # Unpack tuple: (frontmatter_dict, body)
             markdown_body = parse_markdown_body(content)
 
@@ -231,7 +231,7 @@ class ProfileLoader:
                 raise ProfileNotFoundError(f"Profile '{current_name}' not found in search paths")
 
             try:
-                content = profile_file.read_text()
+                content = profile_file.read_text(encoding='utf-8')
                 data, _ = parse_frontmatter(content)
                 current_name = data.get("profile", {}).get("extends")
             except Exception as e:
@@ -275,7 +275,7 @@ class ProfileLoader:
             profile_files.append(profile_file)
 
             try:
-                content = profile_file.read_text()
+                content = profile_file.read_text(encoding='utf-8')
                 data, _ = parse_frontmatter(content)
                 markdown_body = parse_markdown_body(content)
 
@@ -342,7 +342,7 @@ class ProfileLoader:
                 raise ProfileNotFoundError(f"Profile '{profile_name}' not found")
 
             try:
-                content = profile_file.read_text()
+                content = profile_file.read_text(encoding='utf-8')
                 data, _ = parse_frontmatter(content)
                 markdown_body = parse_markdown_body(content)
 
