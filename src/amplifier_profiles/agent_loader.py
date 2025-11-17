@@ -62,7 +62,7 @@ class AgentLoader:
 
         try:
             # Parse frontmatter (parse functions expect str content, not Path)
-            content = agent_file.read_text()
+            content = agent_file.read_text(encoding='utf-8')
             data, _ = parse_frontmatter(content)  # Unpack tuple: (frontmatter_dict, body)
             markdown_body = parse_markdown_body(content)
 
