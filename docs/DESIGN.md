@@ -9,6 +9,7 @@ audience: developer
 This document describes the design and architecture of the amplifier-profiles library, which provides profile and agent loading, inheritance resolution, and Mount Plan compilation.
 
 **Related Documentation:**
+
 - [API Reference](../README.md) - ProfileLoader, AgentLoader, compile_profile_to_mount_plan
 - [Profile Authoring](PROFILE_AUTHORING.md) - User guide for creating profiles
 - [Agent Authoring](AGENT_AUTHORING.md) - User guide for creating agents
@@ -31,38 +32,44 @@ Profiles are Markdown files with YAML frontmatter:
 
 ```markdown
 # web-dev.md
+
 ---
+
 profile:
-  name: web-dev
-  version: 1.0.0
-  description: Web development profile with React tooling
-  extends: base  # Optional: inherit from another profile
+name: web-dev
+version: 1.0.0
+description: Web development profile with React tooling
+extends: base # Optional: inherit from another profile
 
 session:
-  orchestrator: loop-streaming
-  context: context-persistent
-  max_tokens: 200000
-  compact_threshold: 0.92
+orchestrator: loop-streaming
+context: context-persistent
+max_tokens: 200000
+compact_threshold: 0.92
 
 providers:
-  - module: provider-anthropic
-    config:
-      model: claude-sonnet-4-5
-      api_key: ${ANTHROPIC_API_KEY}
+
+- module: provider-anthropic
+  config:
+  model: claude-sonnet-4-5
+  api_key: ${ANTHROPIC_API_KEY}
 
 tools:
-  - module: tool-filesystem
-    config:
-      allowed_paths: ["."]
-      require_approval: false
-  - module: tool-bash
-  - module: tool-web
+
+- module: tool-filesystem
+  config:
+  allowed_paths: ["."]
+  require_approval: false
+- module: tool-bash
+- module: tool-web
 
 hooks:
-  - module: hooks-logging
-    config:
-      output_dir: .amplifier/logs
-  - module: hooks-backup
+
+- module: hooks-logging
+  config:
+  output_dir: .amplifier/logs
+- module: hooks-backup
+
 ---
 
 [Optional system instruction or additional content can go here]
@@ -98,7 +105,7 @@ providers:
       model: claude-sonnet-4-5
   - module: provider-openai
     config:
-      model: gpt-5-codex
+      model: gpt-5.1-codex
 ```
 
 Each module entry has:
@@ -183,36 +190,47 @@ Example:
 
 ```markdown
 # foundation.md
+
 ---
+
 profile:
-  name: foundation
+name: foundation
 session:
-  orchestrator: loop-basic
-  context: context-simple
+orchestrator: loop-basic
+context: context-simple
+
 ---
 
 # base.md
+
 ---
+
 profile:
-  name: base
-  extends: foundation
+name: base
+extends: foundation
 session:
-  max_tokens: 100000  # Adds to foundation
+max_tokens: 100000 # Adds to foundation
 tools:
-  - module: tool-filesystem
-hooks:
-  - module: hooks-logging
+
+- module: tool-filesystem
+  hooks:
+- module: hooks-logging
+
 ---
 
 # dev.md
+
 ---
+
 profile:
-  name: dev
-  extends: base
+name: dev
+extends: base
 session:
-  orchestrator: loop-streaming  # Overrides base's orchestrator
+orchestrator: loop-streaming # Overrides base's orchestrator
 tools:
-  - module: tool-web
+
+- module: tool-web
+
 ---
 ```
 
@@ -347,7 +365,7 @@ profile:
   name: my-dev
   version: 1.0.0
   description: My development setup
-  extends: dev  # Inherit from bundled dev profile
+  extends: dev # Inherit from bundled dev profile
 
 # Add extra tools
 tools:
@@ -377,7 +395,7 @@ profile:
   extends: dev
 
 session:
-  max_tokens: 150000  # Project standard
+  max_tokens: 150000 # Project standard
 
 hooks:
   - module: hooks-project-compliance
@@ -409,7 +427,7 @@ Create `.amplifier/profiles/dev.md`:
 ---
 # This overlays the bundled dev profile
 session:
-  max_tokens: 250000  # Project wants more tokens
+  max_tokens: 250000 # Project wants more tokens
 
 tools:
   - module: tool-project-specific
@@ -426,7 +444,7 @@ Create `~/.amplifier/profiles/dev.md`:
 providers:
   - module: provider-anthropic
     config:
-      model: claude-opus-4-1  # I prefer Opus
+      model: claude-opus-4-1 # I prefer Opus
 ---
 ```
 
@@ -517,7 +535,7 @@ providers:
       model: claude-sonnet-4-5
   - module: provider-openai
     config:
-      model: gpt-5-codex
+      model: gpt-5.1-codex
 ```
 
 The orchestrator will use them based on its strategy (e.g., fallback, load balancing).
@@ -605,11 +623,13 @@ These profiles ship with the package and serve as templates for your own profile
 ## Related Documentation
 
 **Within This Library:**
+
 - [PROFILE_AUTHORING.md](PROFILE_AUTHORING.md) - User guide for creating profiles
 - [AGENT_AUTHORING.md](AGENT_AUTHORING.md) - User guide for creating agents
 - [Main README](../README.md) - Complete API reference
 
 **External Dependencies:**
+
 - [amplifier-core](https://github.com/microsoft/amplifier-core) - Kernel mechanisms and Mount Plan specification
 - [amplifier-collections](https://github.com/microsoft/amplifier-collections) - Collection system for collection:name syntax
 
