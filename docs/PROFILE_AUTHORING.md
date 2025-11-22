@@ -612,7 +612,7 @@ profile:
   name: gpt-profile
   version: "1.0.0"
   description: "GPT-5 configuration"
-  model: "openai/gpt-5" # Shorthand for provider config
+  model: "openai/gpt-5.1" # Shorthand for provider config
 ```
 
 ### Context File Patterns
