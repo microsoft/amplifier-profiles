@@ -274,6 +274,11 @@ class Profile(BaseModel):
     tools: list[ModuleConfig] = Field(default_factory=list)
     hooks: list[ModuleConfig] = Field(default_factory=list)
     agents: AgentsConfig | None = None
+    exclude: ExclusionConfig | None = None  # Selective exclusion of inherited modules
+
+# Exclusion types for selective inheritance
+ExclusionValue = list[str] | Literal["all"]  # List of module IDs or "all"
+ExclusionConfig = dict[str, ExclusionValue]  # e.g., {"hooks": ["hooks-logging"], "tools": "all"}
 ```
 
 #### Agent Models

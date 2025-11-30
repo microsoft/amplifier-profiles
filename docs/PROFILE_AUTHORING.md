@@ -308,7 +308,89 @@ agents:
     - bug-hunter
 ```
 
-**Note:** There is no `exclude` field. Use `include` to specify exactly which agents you want.
+**Note:** For agent filtering, use `include` to specify exactly which agents you want. For excluding inherited modules (tools, hooks, providers), see [Selective Inheritance with Exclude](#selective-inheritance-with-exclude).
+
+### Selective Inheritance with Exclude
+
+When extending a parent profile, you may want to remove specific inherited modules rather than adding to them. The `exclude` field allows selective removal of hooks, tools, or providers.
+
+**Basic syntax:**
+
+```yaml
+profile:
+  name: my-profile
+  extends: parent-profile
+
+exclude:
+  hooks:
+    - hooks-logging        # Remove specific hook by module ID
+    - hooks-todo-reminder
+  tools:
+    - tool-search          # Remove specific tool by module ID
+  providers:
+    - provider-ollama      # Remove specific provider by module ID
+```
+
+**Exclusion types:**
+
+| Type | Syntax | Effect |
+|------|--------|--------|
+| **Specific modules** | `["module-id-1", "module-id-2"]` | Removes listed modules only |
+| **All modules** | `"all"` | Removes entire section from parent |
+
+**Example: Exclude all inherited hooks:**
+
+```yaml
+profile:
+  name: minimal
+  extends: dev
+
+exclude:
+  hooks: "all"  # Remove ALL hooks from parent
+
+# Can still add your own hooks after exclusion
+hooks:
+  - module: hooks-custom
+```
+
+**How it works:**
+
+1. Parent profile is loaded with all its modules
+2. `exclude` is applied to remove specified modules
+3. Child's own modules (if any) are then merged in
+4. Result: Parent modules minus exclusions plus child additions
+
+**Example workflow:**
+
+```yaml
+# Parent (dev) has:
+# - hooks: [hooks-logging, hooks-streaming-ui, hooks-redaction]
+# - tools: [tool-web, tool-search, tool-filesystem]
+
+# Child profile:
+profile:
+  name: lightweight
+  extends: dev
+
+exclude:
+  hooks:
+    - hooks-logging      # Don't want logging overhead
+  tools:
+    - tool-web           # Don't need web access
+    - tool-search        # Don't need search
+
+# Result: Child inherits:
+# - hooks: [hooks-streaming-ui, hooks-redaction]  (logging removed)
+# - tools: [tool-filesystem]  (web, search removed)
+```
+
+**Testing exclusions:**
+
+```bash
+# Compare parent vs child to verify exclusions work
+amplifier profile show parent-profile --detailed
+amplifier profile show child-profile --detailed
+```
 
 ## Working Examples
 
