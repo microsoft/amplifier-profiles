@@ -93,15 +93,25 @@ def compile_profile_to_mount_plan(
 
     # Load agents using agent loading system (if agent_loader provided by app)
     # Per KERNEL_PHILOSOPHY: App injects policy (where to search) via agent_loader
-    if base.agents and agent_loader is not None:
-        agents_dict = {}
+    if agent_loader is not None and base.agents is not None:
+        agents_dict: dict[str, Any] = {}
 
-        # Determine which agents to load
-        if base.agents.include:
-            agent_names_to_load = base.agents.include
-        elif base.agents.dirs:
+        # Determine which agents to load based on new Smart Single Value format:
+        # - "all": Load all discovered agents
+        # - "none": Load no agents (disabled)
+        # - list[str]: Load specific agents by name
+        # - None: Inherit from parent (handled by merger, not here)
+        if base.agents == "none":
+            # Agents explicitly disabled
+            agent_names_to_load: list[str] = []
+        elif base.agents == "all":
+            # Load all agents from configured search paths
             agent_names_to_load = agent_loader.list_agents()
+        elif isinstance(base.agents, list):
+            # Load specific agents by name
+            agent_names_to_load = base.agents
         else:
+            # Shouldn't happen with proper validation, but be safe
             agent_names_to_load = []
 
         # Load agents from app-configured search locations

@@ -1,6 +1,7 @@
 """Pydantic schemas for Amplifier profiles (YAGNI cleaned - no inline/task/logging/ui)."""
 
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -49,22 +50,12 @@ class SessionConfig(BaseModel):
     context: ModuleConfig = Field(..., description="Context module configuration")
 
 
-class AgentsConfig(BaseModel):
-    """Configuration for agent discovery and filtering (NO inline support - YAGNI removed)."""
-
-    model_config = ConfigDict(frozen=True)
-
-    dirs: list[str] | None = Field(None, description="Directories to search for agent .md files")
-    include: list[str] | None = Field(None, description="Specific agents to include (filters discovered agents)")
-
-
 # Exclusion value types for selective inheritance
 ExclusionValue = str | list[str] | dict[str, Any]
 """
 Exclusion value formats:
-- `"all"` - Exclude entire section (e.g., `tools: all`)
-- `["id1", "id2"]` - Exclude specific module IDs (e.g., `hooks: [hooks-logging]`)
-- `{nested}` - Nested exclusions (e.g., `agents: {dirs: [./path/]}`)
+- `"all"` - Exclude entire section (e.g., `tools: all`, `agents: all`)
+- `["id1", "id2"]` - Exclude specific IDs (e.g., `hooks: [hooks-logging]`, `agents: [agent-a, agent-b]`)
 """
 
 
@@ -75,7 +66,13 @@ class Profile(BaseModel):
 
     profile: ProfileMetadata
     session: SessionConfig
-    agents: AgentsConfig | None = Field(None, description="Agent discovery and filtering")
+    agents: Literal["all", "none"] | list[str] | None = Field(
+        None,
+        description=(
+            "Agent configuration: 'all' (load all discovered agents), 'none' (disable agents), "
+            "or list of specific agent names to include. If omitted, inherits from parent profile."
+        ),
+    )
     providers: list[ModuleConfig] = Field(default_factory=list)
     tools: list[ModuleConfig] = Field(default_factory=list)
     hooks: list[ModuleConfig] = Field(default_factory=list)

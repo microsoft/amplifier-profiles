@@ -18,7 +18,6 @@ from .merger import merge_module_lists
 from .merger import merge_profile_dicts
 from .protocols import CollectionResolverProtocol
 from .protocols import MentionLoaderProtocol
-from .schema import AgentsConfig
 from .schema import ModuleConfig
 from .schema import Profile
 from .schema import ProfileMetadata
@@ -46,7 +45,6 @@ __all__ = [
     "ProfileMetadata",
     "SessionConfig",
     "ModuleConfig",
-    "AgentsConfig",
     "Agent",
     "AgentMeta",
     "SystemConfig",

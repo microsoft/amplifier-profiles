@@ -104,9 +104,7 @@ tools:
 hooks:
   - module: hooks-logging
 
-agents:
-  dirs: ["./agents"]
-  include: ["zen-architect", "bug-hunter"]
+agents: all   # Or: none, or list of agent names, or omit to inherit
 ---
 
 Optional context or system instruction in markdown body.
@@ -232,7 +230,6 @@ Multiple profiles with same name across search paths become overlays:
 ```python
 from amplifier_profiles import (
     Profile, ProfileMetadata, SessionConfig, ModuleConfig,
-    AgentsConfig
 )
 # Note: ModuleConfig has a to_dict() method for Mount Plan conversion
 
@@ -273,7 +270,7 @@ class Profile(BaseModel):
     providers: list[ModuleConfig] = Field(default_factory=list)
     tools: list[ModuleConfig] = Field(default_factory=list)
     hooks: list[ModuleConfig] = Field(default_factory=list)
-    agents: AgentsConfig | None = None
+    agents: Literal["all", "none"] | list[str] | None = None  # Smart Single Value
     exclude: ExclusionConfig | None = None  # Selective exclusion of inherited modules
 
 # Exclusion types for selective inheritance

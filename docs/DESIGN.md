@@ -115,38 +115,32 @@ Each module entry has:
 
 ### Agent Configuration
 
-Agents use a unified schema supporting multiple loading patterns:
+Agents use a "Smart Single Value" format that's simple and inheritance-friendly:
 
 ```yaml
-# Load from directory
-agents:
-  dirs: ["./agents"]  # Scan for agent .md files
+# Option 1: Load all discovered agents
+agents: all
 
-# Load specific agents from directory
-agents:
-  dirs: ["./agents"]
-  include: ["zen-architect", "bug-hunter"]  # Only load these
+# Option 2: Disable agents completely
+agents: none
 
-# Define agents inline
+# Option 3: Load specific agents by name
 agents:
-  inline:
-    custom-agent:
-      description: "Custom agent"
-      providers:
-        - module: provider-anthropic
-          config:
-            model: claude-sonnet-4-5
-      tools:
-        - module: tool-filesystem
+  - zen-architect
+  - bug-hunter
+  - custom-agent
 
-# Combine approaches
-agents:
-  dirs: ["./agents"]
-  include: ["zen-architect"]
-  inline:
-    extra-agent:
-      description: "Additional inline agent"
+# Option 4: Omit to inherit from parent (default behavior)
+# (no agents field)
 ```
+
+**Inheritance semantics:**
+- If `agents` is omitted in a child profile, it inherits the parent's setting
+- If `agents` is specified, it completely overrides the parent
+- Use `exclude: {agents: all}` to disable inherited agents
+- Use `exclude: {agents: [agent-a, agent-b]}` to exclude specific agents from an inherited list
+
+**Search paths:** Agent search paths (where to look for agent files) are configured by the application (CLI, etc.), not in profiles. The `agents` field only controls *which* of the discovered agents to load.
 
 ## Search Path Mechanism
 
@@ -478,7 +472,7 @@ Variables are expanded at runtime when the Mount Plan is compiled.
 
 ### Profile Naming
 
-- **Bundled profiles**: Single word (e.g., `base`, `dev`, `production`)
+- **Bundled profiles**: Single word (e.g., `base`, `dev`, `general`)
 - **Project profiles**: Descriptive (e.g., `frontend-dev`, `backend-prod`)
 - **User profiles**: Personal preference (e.g., `alice-dev`, `my-research`)
 
@@ -614,7 +608,7 @@ See the bundled profiles in `amplifier_app_cli/data/profiles/` for reference:
 - `foundation.md` - Absolute minimum foundation
 - `base.md` - Core tools and hooks
 - `dev.md` - Development profile
-- `production.md` - Production profile with safety
+- `general.md` - General-purpose profile with reliability focus
 - `test.md` - Testing profile with mock provider
 - `full.md` - Kitchen sink with all modules
 

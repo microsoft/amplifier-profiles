@@ -9,6 +9,7 @@ Key principles:
 - Sources are inherited - child profiles don't need to repeat git URLs
 - Scalars override - simple values in child replace parent values
 - Exclusions allow selective inheritance (exclude sections or specific items)
+- Agents field: inherits from parent if omitted, can be excluded
 
 This supports the "merge-then-validate" pattern where validation happens
 after the complete inheritance chain is merged.
@@ -16,7 +17,8 @@ after the complete inheritance chain is merged.
 Exclusion syntax:
 - `exclude: {tools: all}` - exclude entire tools section from inheritance
 - `exclude: {hooks: [hooks-logging, hooks-redaction]}` - exclude specific hooks
-- `exclude: {agents: {dirs: [./inherited/]}}` - exclude specific nested values
+- `exclude: {agents: all}` - exclude agents section (disable agents)
+- `exclude: {agents: [agent-a, agent-b]}` - exclude specific agents from list
 """
 
 from typing import Any
@@ -30,9 +32,8 @@ def apply_exclusions(inherited: dict[str, Any], exclusions: dict[str, Any]) -> d
     with child additions. This enables selective inheritance.
 
     Exclusion formats:
-    - `section: "all"` - Remove entire section (e.g., `tools: all`)
-    - `section: [list]` - Remove specific module IDs (e.g., `hooks: [hooks-logging]`)
-    - `section: {nested}` - Nested exclusions (e.g., `agents: {dirs: [./path/]}`)
+    - `section: "all"` - Remove entire section (e.g., `tools: all`, `agents: all`)
+    - `section: [list]` - Remove specific items (e.g., `hooks: [hooks-logging]`, `agents: [agent-name]`)
 
     Args:
         inherited: Configuration inherited from parent (will be modified)
@@ -69,7 +70,7 @@ def apply_exclusions(inherited: dict[str, Any], exclusions: dict[str, Any]) -> d
             result = _apply_exclude_list(result, section, exclusion_value)
 
         elif isinstance(exclusion_value, dict):
-            # Nested exclusions (e.g., agents: {dirs: [./path/], include: [agent-name]})
+            # Nested exclusions for complex sections
             result = _apply_exclude_nested(result, section, exclusion_value)
 
     return result
@@ -80,7 +81,8 @@ def _apply_exclude_all(result: dict[str, Any], section: str) -> dict[str, Any]:
     if section in ("tools", "hooks", "providers"):
         result[section] = []
     elif section == "agents":
-        result[section] = {}
+        # For agents, set to "none" to disable (Smart Single Value format)
+        result[section] = "none"
     else:
         # For other sections, remove entirely
         del result[section]
@@ -88,24 +90,22 @@ def _apply_exclude_all(result: dict[str, Any], section: str) -> dict[str, Any]:
 
 
 def _apply_exclude_list(result: dict[str, Any], section: str, exclusion_list: list) -> dict[str, Any]:
-    """Apply list exclusion - removes specific items from module lists."""
+    """Apply list exclusion - removes specific items from module lists or agent names."""
     if section in ("tools", "hooks", "providers") and isinstance(result[section], list):
         result[section] = [item for item in result[section] if item.get("module") not in exclusion_list]
-    elif (
-        section == "agents"
-        and isinstance(result[section], dict)
-        and "dirs" in result[section]
-        and isinstance(result[section]["dirs"], list)
-    ):
-        # For agents, treat list as dirs to exclude
-        agents_copy = result[section].copy()
-        agents_copy["dirs"] = [d for d in agents_copy["dirs"] if d not in exclusion_list]
-        result[section] = agents_copy
+    elif section == "agents" and isinstance(result[section], list):
+        # For agents (Smart Single Value format), remove specific agent names from list
+        result[section] = [agent for agent in result[section] if agent not in exclusion_list]
     return result
 
 
 def _apply_exclude_nested(result: dict[str, Any], section: str, nested_exclusions: dict) -> dict[str, Any]:
-    """Apply nested exclusions (e.g., agents: {dirs: [./path/], include: [agent-name]})."""
+    """Apply nested exclusions for dict-type sections.
+
+    Note: For 'agents' section with Smart Single Value format (str | list[str]),
+    nested exclusions don't apply - use 'all' or list exclusions instead.
+    """
+    # Skip sections that aren't dicts (e.g., agents with Smart Single Value format)
     if not isinstance(result.get(section), dict):
         return result
 

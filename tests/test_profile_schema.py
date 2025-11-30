@@ -1,7 +1,6 @@
 """Tests for amplifier_profiles.schema module."""
 
 import pytest  # type: ignore
-from amplifier_profiles.schema import AgentsConfig
 from amplifier_profiles.schema import ModuleConfig
 from amplifier_profiles.schema import Profile
 from amplifier_profiles.schema import ProfileMetadata
@@ -174,46 +173,6 @@ class TestSessionConfig:
             SessionConfig(orchestrator=ModuleConfig(module="loop-basic", source=None, config=None))  # type: ignore[call-arg]  # Intentionally invalid - testing validation
 
 
-class TestAgentsConfig:
-    """Tests for AgentsConfig model."""
-
-    def test_agents_config_empty(self):
-        """Create empty agents config."""
-        config = AgentsConfig(dirs=None, include=None)
-        assert config.dirs is None
-        assert config.include is None
-
-    def test_agents_config_with_dirs(self):
-        """Create agents config with search directories."""
-        config = AgentsConfig(dirs=["~/.amplifier/agents", "./agents"], include=None)
-        assert config.dirs == ["~/.amplifier/agents", "./agents"]
-
-    def test_agents_config_with_include(self):
-        """Create agents config with include filter."""
-        config = AgentsConfig(dirs=None, include=["zen-architect", "bug-hunter"])
-        assert config.include == ["zen-architect", "bug-hunter"]
-
-    def test_agents_config_complete(self):
-        """Create agents config with all fields."""
-        config = AgentsConfig(
-            dirs=["./agents"],
-            include=["agent-one", "agent-two"],
-        )
-        assert config.dirs == ["./agents"]
-        assert config.include == ["agent-one", "agent-two"]
-
-    def test_agents_config_frozen(self):
-        """Verify agents config is immutable."""
-        config = AgentsConfig(dirs=["./agents"], include=None)
-        with pytest.raises(ValidationError, match="frozen"):
-            config.dirs = ["changed"]
-
-    def test_no_inline_field(self):
-        """Verify AgentsConfig has no 'inline' field (YAGNI)."""
-        config = AgentsConfig(dirs=None, include=None)
-        assert not hasattr(config, "inline")
-
-
 class TestProfile:
     """Tests for Profile model."""
 
@@ -235,20 +194,44 @@ class TestProfile:
         assert profile.tools == []
         assert profile.hooks == []
 
-    def test_profile_with_agents(self):
-        """Create profile with agents configuration."""
+    def test_profile_with_agents_all(self):
+        """Create profile with agents='all' configuration."""
         profile = Profile(
             profile=ProfileMetadata(name="test", version="1.0.0", description="Test", model=None, extends=None),
             session=SessionConfig(
                 orchestrator=ModuleConfig(module="loop-basic", source=None, config=None),
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
-            agents=AgentsConfig(dirs=["./agents"], include=["agent-one"]),
+            agents="all",
             exclude=None,
         )
-        assert profile.agents is not None
-        assert profile.agents.dirs == ["./agents"]
-        assert profile.agents.include == ["agent-one"]
+        assert profile.agents == "all"
+
+    def test_profile_with_agents_none(self):
+        """Create profile with agents='none' configuration."""
+        profile = Profile(
+            profile=ProfileMetadata(name="test", version="1.0.0", description="Test", model=None, extends=None),
+            session=SessionConfig(
+                orchestrator=ModuleConfig(module="loop-basic", source=None, config=None),
+                context=ModuleConfig(module="context-simple", source=None, config=None),
+            ),
+            agents="none",
+            exclude=None,
+        )
+        assert profile.agents == "none"
+
+    def test_profile_with_agents_list(self):
+        """Create profile with specific agent list."""
+        profile = Profile(
+            profile=ProfileMetadata(name="test", version="1.0.0", description="Test", model=None, extends=None),
+            session=SessionConfig(
+                orchestrator=ModuleConfig(module="loop-basic", source=None, config=None),
+                context=ModuleConfig(module="context-simple", source=None, config=None),
+            ),
+            agents=["agent-one", "agent-two"],
+            exclude=None,
+        )
+        assert profile.agents == ["agent-one", "agent-two"]
 
     def test_profile_with_providers(self):
         """Create profile with provider modules."""
@@ -318,7 +301,7 @@ class TestProfile:
                 orchestrator=ModuleConfig(module="loop-streaming", source=None, config={"max_tokens": 8000}),
                 context=ModuleConfig(module="context-persistent", source=None, config={"path": "~/.context"}),
             ),
-            agents=AgentsConfig(dirs=["./agents"], include=["zen-architect"]),
+            agents=["zen-architect"],
             providers=[
                 ModuleConfig(module="provider-anthropic", source=None, config={"api_key_env": "ANTHROPIC_API_KEY"})
             ],

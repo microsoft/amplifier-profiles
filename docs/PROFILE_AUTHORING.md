@@ -62,9 +62,7 @@ orchestrator: # Optional: orchestrator-specific config
   config:
     extended_thinking: true # Example for Claude Sonnet 4.5
 
-agents: # Optional: agent configuration
-  dirs: ["./agents"] # Directories to search for .md files
-  include: ["zen-architect"] # Filter to specific agents only
+agents: all # Optional: agent loading (all | none | [list] | omit to inherit)
 
 context: # Optional: context file loading
   files: ["./docs/*.md"] # Files/globs to load each turn
@@ -293,22 +291,34 @@ tools:
 
 ### Agent Configuration
 
-The `agents` section controls which agents are available:
+The `agents` field controls which agents are loaded. It uses a "Smart Single Value" format that's simple and inheritance-friendly:
 
 ```yaml
-agents:
-  # Option 1: Load from directories
-  dirs:
-    - "./agents"
-    - "./custom/agents"
+# Option 1: Load all discovered agents
+agents: all
 
-  # Option 2: Filter loaded agents (only these will be available)
-  include:
-    - zen-architect
-    - bug-hunter
+# Option 2: Disable agents completely
+agents: none
+
+# Option 3: Load specific agents by name
+agents:
+  - zen-architect
+  - bug-hunter
+  - custom-agent
+
+# Option 4: Omit to inherit from parent (default behavior)
+# (no agents field - inherits parent's agents setting)
 ```
 
-**Note:** For agent filtering, use `include` to specify exactly which agents you want. For excluding inherited modules (tools, hooks, providers), see [Selective Inheritance with Exclude](#selective-inheritance-with-exclude).
+**How inheritance works:**
+- If `agents` is omitted in child profile, it inherits the parent's setting
+- If `agents` is specified, it overrides the parent completely
+- Use `exclude: {agents: all}` to disable agents inherited from parent
+- Use `exclude: {agents: [agent-name]}` to exclude specific agents from an inherited list
+
+**Where agents are discovered:** Agent search paths are configured by the application (CLI, etc.), not in profiles. The `agents` field only controls *which* discovered agents to load, not *where* to look.
+
+**Note:** For excluding specific agents from inheritance, use the `exclude` mechanism. See [Selective Inheritance with Exclude](#selective-inheritance-with-exclude).
 
 ### Selective Inheritance with Exclude
 
@@ -452,20 +462,18 @@ tools:
 hooks:
   - module: hooks-streaming-ui
 
-agents:
-  dirs:
-    - ./agents
+agents: all  # Load all discovered agents
 ---
 ```
 
-### Example 3: Production Profile with Filtered Agents
+### Example 3: General Profile with Filtered Agents
 
 ```yaml
 ---
 profile:
-  name: production
+  name: general
   version: "1.1.0"
-  description: "Production configuration optimized for reliability"
+  description: "General-purpose configuration optimized for reliability"
   extends: base
 
 session:
@@ -484,10 +492,7 @@ tools:
 
 # Only load specific agents for production
 agents:
-  dirs:
-    - ./agents
-  include:
-    - researcher # Only the researcher agent
+  - researcher  # Only the researcher agent
 ---
 ```
 
@@ -522,12 +527,9 @@ tools:
   - module: tool-filesystem # Read documents
 
 agents:
-  dirs:
-    - ./agents
-  include:
-    - researcher
-    - synthesis-master
-    - content-researcher
+  - researcher
+  - synthesis-master
+  - content-researcher
 
 context:
   files: ["./research/context/*.md"]
@@ -595,13 +597,9 @@ hooks:
   - module: hooks-streaming-ui
 
 agents:
-  dirs:
-    - ./project/agents # Project-specific agents
-    - ./agents # Standard agents
-  include:
-    - zen-architect
-    - bug-hunter
-    - code-reviewer # Project-specific
+  - zen-architect
+  - bug-hunter
+  - code-reviewer  # Project-specific
 
 context:
   files:
@@ -730,9 +728,9 @@ Amplifier profiles provide powerful, composable configuration:
 - **YAML format** with clear schema
 - **Inheritance** for building on existing profiles
 - **Module lists** for tools, providers, and hooks
-- **Agent filtering** via directories and include lists
+- **Agent selection** via `all`, `none`, or specific agent list
 - **Session controls** for tokens and compaction
 
-Start with bundled profiles (`foundation`, `base`, `dev`, `production`) and extend them for your specific needs.
+Start with bundled profiles (`foundation`, `base`, `dev`, `general`) and extend them for your specific needs.
 
 **For complete schema specification**, see the [amplifier-profiles README](../README.md#schemas).

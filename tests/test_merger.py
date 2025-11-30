@@ -389,11 +389,12 @@ class TestApplyExclusions:
         assert result["providers"] == []
 
     def test_exclude_all_agents(self):
-        """'all' clears agents dict."""
-        inherited = {"agents": {"dirs": ["./agents/"], "include": ["agent-one"]}}
+        """'all' sets agents to 'none' (Smart Single Value format)."""
+        inherited = {"agents": ["agent-one", "agent-two"]}
         result = apply_exclusions(inherited, {"agents": "all"})
 
-        assert result["agents"] == {}
+        # With Smart Single Value format, excluding all agents sets to "none"
+        assert result["agents"] == "none"
 
     def test_exclude_specific_tools_by_module_id(self):
         """List excludes specific modules by ID."""
@@ -432,27 +433,28 @@ class TestApplyExclusions:
         assert "tools" in result
         assert len(result["tools"]) == 1
 
-    def test_exclude_nested_agents_dirs(self):
-        """Nested dict excludes specific agent dirs."""
-        inherited = {"agents": {"dirs": ["./agents/", "./custom-agents/", "./external/"]}}
-        result = apply_exclusions(inherited, {"agents": {"dirs": ["./external/"]}})
+    def test_exclude_specific_agents_from_list(self):
+        """List exclusion removes specific agents from agents list (Smart Single Value format)."""
+        inherited = {"agents": ["agent-one", "agent-two", "agent-three"]}
+        result = apply_exclusions(inherited, {"agents": ["agent-two"]})
 
-        assert result["agents"]["dirs"] == ["./agents/", "./custom-agents/"]
+        assert result["agents"] == ["agent-one", "agent-three"]
 
-    def test_exclude_nested_agents_include(self):
-        """Nested dict excludes specific agent includes."""
-        inherited = {"agents": {"include": ["agent-one", "agent-two", "agent-three"]}}
-        result = apply_exclusions(inherited, {"agents": {"include": ["agent-two"]}})
+    def test_exclude_multiple_agents_from_list(self):
+        """List exclusion removes multiple agents from agents list."""
+        inherited = {"agents": ["agent-one", "agent-two", "agent-three", "agent-four"]}
+        result = apply_exclusions(inherited, {"agents": ["agent-two", "agent-four"]})
 
-        assert result["agents"]["include"] == ["agent-one", "agent-three"]
+        assert result["agents"] == ["agent-one", "agent-three"]
 
-    def test_exclude_nested_all(self):
-        """Nested 'all' clears specific nested field."""
-        inherited = {"agents": {"dirs": ["./agents/"], "include": ["agent-one"]}}
-        result = apply_exclusions(inherited, {"agents": {"dirs": "all"}})
+    def test_exclude_nested_on_non_dict_section_noop(self):
+        """Nested exclusions on non-dict sections (like agents) are no-ops."""
+        # With Smart Single Value format, agents is a string or list, not a dict
+        inherited = {"agents": ["agent-one", "agent-two"]}
+        result = apply_exclusions(inherited, {"agents": {"some_key": "all"}})
 
-        assert result["agents"]["dirs"] == []
-        assert result["agents"]["include"] == ["agent-one"]
+        # Should be unchanged since nested exclusions don't apply to non-dict sections
+        assert result["agents"] == ["agent-one", "agent-two"]
 
     def test_exclude_multiple_sections(self):
         """Multiple exclusions applied together."""
@@ -549,14 +551,13 @@ class TestMergeProfileDictsWithExclusions:
         assert len(result["providers"]) == 1
         assert result["providers"][0]["module"] == "provider-ollama"
 
-    def test_exclude_nested_agents_dirs(self):
-        """Exclude specific agent directories via nested exclusion."""
-        parent = {"agents": {"dirs": ["./agents/", "./inherited-agents/"], "include": ["agent-one"]}}
-        child = {"exclude": {"agents": {"dirs": ["./inherited-agents/"]}}}
+    def test_exclude_specific_agents_via_list_exclusion(self):
+        """Exclude specific agents via list exclusion (Smart Single Value format)."""
+        parent = {"agents": ["agent-one", "agent-two", "agent-three"]}
+        child = {"exclude": {"agents": ["agent-two"]}}
         result = merge_profile_dicts(parent, child)
 
-        assert result["agents"]["dirs"] == ["./agents/"]
-        assert result["agents"]["include"] == ["agent-one"]
+        assert result["agents"] == ["agent-one", "agent-three"]
 
     def test_complex_exclusion_scenario(self):
         """Complex realistic exclusion scenario."""
@@ -572,23 +573,23 @@ class TestMergeProfileDictsWithExclusions:
                 {"module": "hooks-logging", "source": "git+logging"},
                 {"module": "hooks-redaction", "source": "git+redaction"},
             ],
-            "agents": {"dirs": ["./agents/", "./inherited/"]},
+            "agents": ["zen-architect", "bug-hunter", "inherited-agent"],
         }
 
         child = {
-            "profile": {"name": "production"},
+            "profile": {"name": "child-profile"},
             "exclude": {
-                "tools": ["tool-bash"],  # Remove bash for security
-                "hooks": ["hooks-logging"],  # Use different logging in prod
-                "agents": {"dirs": ["./inherited/"]},  # Don't inherit these agents
+                "tools": ["tool-bash"],  # Remove bash
+                "hooks": ["hooks-logging"],  # Use different logging
+                "agents": ["inherited-agent"],  # Don't inherit this agent
             },
-            "hooks": [{"module": "hooks-production-logging", "source": "git+prod-logging"}],
+            "hooks": [{"module": "hooks-custom-logging", "source": "git+custom-logging"}],
         }
 
         result = merge_profile_dicts(parent, child)
 
         # Profile metadata from child
-        assert result["profile"]["name"] == "production"
+        assert result["profile"]["name"] == "child-profile"
 
         # Session inherited
         assert result["session"]["orchestrator"]["module"] == "loop-basic"
@@ -598,13 +599,13 @@ class TestMergeProfileDictsWithExclusions:
         tool_ids = {t["module"] for t in result["tools"]}
         assert tool_ids == {"tool-web", "tool-filesystem"}
 
-        # Hooks: hooks-logging excluded, redaction inherited, prod-logging added
+        # Hooks: hooks-logging excluded, redaction inherited, custom-logging added
         assert len(result["hooks"]) == 2
         hook_ids = {h["module"] for h in result["hooks"]}
-        assert hook_ids == {"hooks-redaction", "hooks-production-logging"}
+        assert hook_ids == {"hooks-redaction", "hooks-custom-logging"}
 
-        # Agents: inherited/ dir excluded
-        assert result["agents"]["dirs"] == ["./agents/"]
+        # Agents: inherited-agent excluded (Smart Single Value format)
+        assert result["agents"] == ["zen-architect", "bug-hunter"]
 
     def test_no_exclusions_normal_merge(self):
         """Without exclusions, normal merge behavior unchanged."""

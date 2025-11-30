@@ -1,6 +1,5 @@
 """Tests for profile compiler."""
 
-from amplifier_profiles import AgentsConfig
 from amplifier_profiles import ModuleConfig
 from amplifier_profiles import Profile
 from amplifier_profiles import ProfileMetadata
@@ -83,15 +82,15 @@ class TestCompileProfileToMountPlan:
         assert len(mount_plan["hooks"]) == 1
         assert mount_plan["hooks"][0]["config"]["level"] == "DEBUG"
 
-    def test_profile_with_agents_config(self):
-        """Test compiling profile with agents configuration."""
+    def test_profile_with_agents_all(self):
+        """Test compiling profile with agents='all' configuration."""
         profile = Profile(
             profile=ProfileMetadata(name="test", version="1.0.0", description="Test", model=None, extends=None),
             session=SessionConfig(
                 orchestrator=ModuleConfig(module="loop-basic", source=None, config=None),
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
-            agents=AgentsConfig(dirs=["agents/"], include=None),
+            agents="all",
             exclude=None,
         )
 
@@ -100,22 +99,38 @@ class TestCompileProfileToMountPlan:
         # Agents will be loaded by agent_loader (tested separately)
         assert "agents" in mount_plan
 
-    def test_no_inline_agents_in_output(self):
-        """Verify NO inline agent loading occurs (YAGNI cleanup)."""
+    def test_profile_with_agents_list(self):
+        """Test compiling profile with specific agent list."""
         profile = Profile(
             profile=ProfileMetadata(name="test", version="1.0.0", description="Test", model=None, extends=None),
             session=SessionConfig(
                 orchestrator=ModuleConfig(module="loop-basic", source=None, config=None),
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
-            agents=AgentsConfig(dirs=None, include=["test-agent"]),
+            agents=["test-agent", "another-agent"],
             exclude=None,
         )
 
         mount_plan = compile_profile_to_mount_plan(profile)
 
-        # Should compile without trying to access .inline
-        # (which doesn't exist in AgentsConfig anymore)
+        # Agents will be loaded by agent_loader (tested separately)
+        assert "agents" in mount_plan
+
+    def test_profile_with_agents_none(self):
+        """Test compiling profile with agents='none' disables agents."""
+        profile = Profile(
+            profile=ProfileMetadata(name="test", version="1.0.0", description="Test", model=None, extends=None),
+            session=SessionConfig(
+                orchestrator=ModuleConfig(module="loop-basic", source=None, config=None),
+                context=ModuleConfig(module="context-simple", source=None, config=None),
+            ),
+            agents="none",
+            exclude=None,
+        )
+
+        mount_plan = compile_profile_to_mount_plan(profile)
+
+        # Agents should be empty when disabled
         assert "agents" in mount_plan
 
     def test_overlay_merging(self):
