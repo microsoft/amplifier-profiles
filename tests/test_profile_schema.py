@@ -226,6 +226,7 @@ class TestProfile:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=None,
+            exclude=None,
         )
         assert profile.profile.name == "test"
         assert profile.session.orchestrator.module == "loop-basic"
@@ -243,6 +244,7 @@ class TestProfile:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=AgentsConfig(dirs=["./agents"], include=["agent-one"]),
+            exclude=None,
         )
         assert profile.agents is not None
         assert profile.agents.dirs == ["./agents"]
@@ -264,6 +266,7 @@ class TestProfile:
                     config={"model": "claude-sonnet-4-5"},
                 )
             ],
+            exclude=None,
         )
         assert len(profile.providers) == 1
         assert profile.providers[0].module == "provider-anthropic"
@@ -281,6 +284,7 @@ class TestProfile:
                 ModuleConfig(module="tool-filesystem", source=None, config=None),
                 ModuleConfig(module="tool-bash", source=None, config=None),
             ],
+            exclude=None,
         )
         assert len(profile.tools) == 2
         assert profile.tools[0].module == "tool-filesystem"
@@ -295,6 +299,7 @@ class TestProfile:
             ),
             agents=None,
             hooks=[ModuleConfig(module="hooks-logging", source=None, config=None)],
+            exclude=None,
         )
         assert len(profile.hooks) == 1
         assert profile.hooks[0].module == "hooks-logging"
@@ -325,6 +330,7 @@ class TestProfile:
                 ModuleConfig(module="hooks-logging", source=None, config=None),
                 ModuleConfig(module="hooks-redaction", source=None, config=None),
             ],
+            exclude=None,
         )
         assert profile.profile.name == "full-profile"
         assert profile.profile.extends == "base-profile"
@@ -342,6 +348,7 @@ class TestProfile:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=None,
+            exclude=None,
         )
         with pytest.raises(ValidationError, match="frozen"):
             profile.profile = ProfileMetadata(
@@ -376,6 +383,7 @@ class TestProfile:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=None,
+            exclude=None,
         )
         assert not hasattr(profile, "task")
 
@@ -388,6 +396,7 @@ class TestProfile:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=None,
+            exclude=None,
         )
         assert not hasattr(profile, "logging")
 
@@ -400,5 +409,6 @@ class TestProfile:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=None,
+            exclude=None,
         )
         assert not hasattr(profile, "ui")

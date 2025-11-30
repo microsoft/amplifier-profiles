@@ -1,5 +1,6 @@
 """Tests for profile merging utilities."""
 
+from amplifier_profiles.merger import apply_exclusions
 from amplifier_profiles.merger import merge_dicts
 from amplifier_profiles.merger import merge_module_items
 from amplifier_profiles.merger import merge_module_lists
@@ -351,3 +352,267 @@ class TestMergeProfileDicts:
         # Session fully inherited
         assert result["session"]["orchestrator"]["module"] == "loop-basic"
         assert result["session"]["context"]["module"] == "context-simple"
+
+
+class TestApplyExclusions:
+    """Test selective inheritance via exclusions."""
+
+    def test_no_exclusions(self):
+        """Empty exclusions leave inherited config unchanged."""
+        inherited = {"tools": [{"module": "tool-bash"}], "hooks": [{"module": "hooks-logging"}]}
+        result = apply_exclusions(inherited, {})
+        assert result == inherited
+
+    def test_exclude_all_tools(self):
+        """'all' excludes entire section."""
+        inherited = {
+            "tools": [{"module": "tool-bash"}, {"module": "tool-web"}],
+            "hooks": [{"module": "hooks-logging"}],
+        }
+        result = apply_exclusions(inherited, {"tools": "all"})
+
+        assert result["tools"] == []
+        assert len(result["hooks"]) == 1  # Hooks untouched
+
+    def test_exclude_all_hooks(self):
+        """'all' works for hooks section."""
+        inherited = {"hooks": [{"module": "hooks-logging"}, {"module": "hooks-redaction"}]}
+        result = apply_exclusions(inherited, {"hooks": "all"})
+
+        assert result["hooks"] == []
+
+    def test_exclude_all_providers(self):
+        """'all' works for providers section."""
+        inherited = {"providers": [{"module": "provider-anthropic"}]}
+        result = apply_exclusions(inherited, {"providers": "all"})
+
+        assert result["providers"] == []
+
+    def test_exclude_all_agents(self):
+        """'all' clears agents dict."""
+        inherited = {"agents": {"dirs": ["./agents/"], "include": ["agent-one"]}}
+        result = apply_exclusions(inherited, {"agents": "all"})
+
+        assert result["agents"] == {}
+
+    def test_exclude_specific_tools_by_module_id(self):
+        """List excludes specific modules by ID."""
+        inherited = {
+            "tools": [{"module": "tool-bash"}, {"module": "tool-web"}, {"module": "tool-filesystem"}],
+        }
+        result = apply_exclusions(inherited, {"tools": ["tool-bash", "tool-filesystem"]})
+
+        assert len(result["tools"]) == 1
+        assert result["tools"][0]["module"] == "tool-web"
+
+    def test_exclude_specific_hooks_by_module_id(self):
+        """List excludes specific hooks by ID."""
+        inherited = {
+            "hooks": [{"module": "hooks-logging"}, {"module": "hooks-redaction"}, {"module": "hooks-approval"}],
+        }
+        result = apply_exclusions(inherited, {"hooks": ["hooks-logging"]})
+
+        assert len(result["hooks"]) == 2
+        module_ids = {h["module"] for h in result["hooks"]}
+        assert module_ids == {"hooks-redaction", "hooks-approval"}
+
+    def test_exclude_nonexistent_module_no_error(self):
+        """Excluding nonexistent module doesn't error."""
+        inherited = {"tools": [{"module": "tool-bash"}]}
+        result = apply_exclusions(inherited, {"tools": ["tool-nonexistent"]})
+
+        assert len(result["tools"]) == 1
+        assert result["tools"][0]["module"] == "tool-bash"
+
+    def test_exclude_nonexistent_section_no_error(self):
+        """Excluding nonexistent section doesn't error."""
+        inherited = {"tools": [{"module": "tool-bash"}]}
+        result = apply_exclusions(inherited, {"hooks": "all"})
+
+        assert "tools" in result
+        assert len(result["tools"]) == 1
+
+    def test_exclude_nested_agents_dirs(self):
+        """Nested dict excludes specific agent dirs."""
+        inherited = {"agents": {"dirs": ["./agents/", "./custom-agents/", "./external/"]}}
+        result = apply_exclusions(inherited, {"agents": {"dirs": ["./external/"]}})
+
+        assert result["agents"]["dirs"] == ["./agents/", "./custom-agents/"]
+
+    def test_exclude_nested_agents_include(self):
+        """Nested dict excludes specific agent includes."""
+        inherited = {"agents": {"include": ["agent-one", "agent-two", "agent-three"]}}
+        result = apply_exclusions(inherited, {"agents": {"include": ["agent-two"]}})
+
+        assert result["agents"]["include"] == ["agent-one", "agent-three"]
+
+    def test_exclude_nested_all(self):
+        """Nested 'all' clears specific nested field."""
+        inherited = {"agents": {"dirs": ["./agents/"], "include": ["agent-one"]}}
+        result = apply_exclusions(inherited, {"agents": {"dirs": "all"}})
+
+        assert result["agents"]["dirs"] == []
+        assert result["agents"]["include"] == ["agent-one"]
+
+    def test_exclude_multiple_sections(self):
+        """Multiple exclusions applied together."""
+        inherited = {
+            "tools": [{"module": "tool-bash"}, {"module": "tool-web"}],
+            "hooks": [{"module": "hooks-logging"}],
+            "providers": [{"module": "provider-anthropic"}],
+        }
+        result = apply_exclusions(
+            inherited,
+            {"tools": "all", "hooks": ["hooks-logging"], "providers": ["provider-anthropic"]},
+        )
+
+        assert result["tools"] == []
+        assert result["hooks"] == []
+        assert result["providers"] == []
+
+    def test_exclude_other_section_removes_entirely(self):
+        """Non-standard sections are removed entirely with 'all'."""
+        inherited = {"custom": {"setting": "value"}}
+        result = apply_exclusions(inherited, {"custom": "all"})
+
+        assert "custom" not in result
+
+
+class TestMergeProfileDictsWithExclusions:
+    """Test merge_profile_dicts with exclusion support."""
+
+    def test_exclude_not_propagated_to_result(self):
+        """Exclusions are applied but not included in merged result."""
+        parent = {"tools": [{"module": "tool-bash"}]}
+        child = {"exclude": {"tools": "all"}}
+        result = merge_profile_dicts(parent, child)
+
+        assert "exclude" not in result
+
+    def test_exclude_all_tools_then_add_new(self):
+        """Exclude all parent tools, then add child's tools."""
+        parent = {"tools": [{"module": "tool-bash", "source": "git+bash"}, {"module": "tool-web", "source": "git+web"}]}
+        child = {"exclude": {"tools": "all"}, "tools": [{"module": "tool-filesystem", "source": "git+fs"}]}
+        result = merge_profile_dicts(parent, child)
+
+        # Parent tools excluded, only child tool remains
+        assert len(result["tools"]) == 1
+        assert result["tools"][0]["module"] == "tool-filesystem"
+
+    def test_exclude_specific_hooks_keep_others(self):
+        """Exclude specific hooks, keep others, add new ones."""
+        parent = {
+            "hooks": [
+                {"module": "hooks-logging", "source": "git+logging", "config": {"level": "INFO"}},
+                {"module": "hooks-redaction", "source": "git+redaction"},
+            ]
+        }
+        child = {
+            "exclude": {"hooks": ["hooks-redaction"]},
+            "hooks": [{"module": "hooks-approval", "source": "git+approval"}],
+        }
+        result = merge_profile_dicts(parent, child)
+
+        # hooks-redaction excluded, hooks-logging inherited, hooks-approval added
+        assert len(result["hooks"]) == 2
+        module_ids = {h["module"] for h in result["hooks"]}
+        assert module_ids == {"hooks-logging", "hooks-approval"}
+
+    def test_exclude_specific_then_merge_with_same_module(self):
+        """Exclude specific module, then merge child's version of same module."""
+        parent = {"tools": [{"module": "tool-bash", "source": "git+old", "config": {"old": True}}]}
+        child = {
+            "exclude": {"tools": ["tool-bash"]},
+            "tools": [{"module": "tool-bash", "source": "git+new", "config": {"new": True}}],
+        }
+        result = merge_profile_dicts(parent, child)
+
+        # Parent's tool-bash excluded, child's version used (no merge)
+        assert len(result["tools"]) == 1
+        assert result["tools"][0]["source"] == "git+new"
+        assert result["tools"][0]["config"] == {"new": True}
+
+    def test_exclude_all_providers_start_fresh(self):
+        """Exclude all parent providers and define entirely new set."""
+        parent = {
+            "providers": [
+                {"module": "provider-anthropic", "source": "git+anthropic"},
+                {"module": "provider-openai", "source": "git+openai"},
+            ]
+        }
+        child = {
+            "exclude": {"providers": "all"},
+            "providers": [{"module": "provider-ollama", "source": "git+ollama"}],
+        }
+        result = merge_profile_dicts(parent, child)
+
+        assert len(result["providers"]) == 1
+        assert result["providers"][0]["module"] == "provider-ollama"
+
+    def test_exclude_nested_agents_dirs(self):
+        """Exclude specific agent directories via nested exclusion."""
+        parent = {"agents": {"dirs": ["./agents/", "./inherited-agents/"], "include": ["agent-one"]}}
+        child = {"exclude": {"agents": {"dirs": ["./inherited-agents/"]}}}
+        result = merge_profile_dicts(parent, child)
+
+        assert result["agents"]["dirs"] == ["./agents/"]
+        assert result["agents"]["include"] == ["agent-one"]
+
+    def test_complex_exclusion_scenario(self):
+        """Complex realistic exclusion scenario."""
+        parent = {
+            "profile": {"name": "base"},
+            "session": {"orchestrator": {"module": "loop-basic"}},
+            "tools": [
+                {"module": "tool-bash", "source": "git+bash"},
+                {"module": "tool-web", "source": "git+web"},
+                {"module": "tool-filesystem", "source": "git+fs"},
+            ],
+            "hooks": [
+                {"module": "hooks-logging", "source": "git+logging"},
+                {"module": "hooks-redaction", "source": "git+redaction"},
+            ],
+            "agents": {"dirs": ["./agents/", "./inherited/"]},
+        }
+
+        child = {
+            "profile": {"name": "production"},
+            "exclude": {
+                "tools": ["tool-bash"],  # Remove bash for security
+                "hooks": ["hooks-logging"],  # Use different logging in prod
+                "agents": {"dirs": ["./inherited/"]},  # Don't inherit these agents
+            },
+            "hooks": [{"module": "hooks-production-logging", "source": "git+prod-logging"}],
+        }
+
+        result = merge_profile_dicts(parent, child)
+
+        # Profile metadata from child
+        assert result["profile"]["name"] == "production"
+
+        # Session inherited
+        assert result["session"]["orchestrator"]["module"] == "loop-basic"
+
+        # Tools: tool-bash excluded, others inherited
+        assert len(result["tools"]) == 2
+        tool_ids = {t["module"] for t in result["tools"]}
+        assert tool_ids == {"tool-web", "tool-filesystem"}
+
+        # Hooks: hooks-logging excluded, redaction inherited, prod-logging added
+        assert len(result["hooks"]) == 2
+        hook_ids = {h["module"] for h in result["hooks"]}
+        assert hook_ids == {"hooks-redaction", "hooks-production-logging"}
+
+        # Agents: inherited/ dir excluded
+        assert result["agents"]["dirs"] == ["./agents/"]
+
+    def test_no_exclusions_normal_merge(self):
+        """Without exclusions, normal merge behavior unchanged."""
+        parent = {"tools": [{"module": "tool-bash", "source": "git+bash"}]}
+        child = {"tools": [{"module": "tool-bash", "config": {"debug": True}}]}
+        result = merge_profile_dicts(parent, child)
+
+        # Normal merge: source inherited, config added
+        assert len(result["tools"]) == 1
+        assert result["tools"][0]["source"] == "git+bash"
+        assert result["tools"][0]["config"] == {"debug": True}

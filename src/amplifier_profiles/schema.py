@@ -58,6 +58,16 @@ class AgentsConfig(BaseModel):
     include: list[str] | None = Field(None, description="Specific agents to include (filters discovered agents)")
 
 
+# Exclusion value types for selective inheritance
+ExclusionValue = str | list[str] | dict[str, Any]
+"""
+Exclusion value formats:
+- `"all"` - Exclude entire section (e.g., `tools: all`)
+- `["id1", "id2"]` - Exclude specific module IDs (e.g., `hooks: [hooks-logging]`)
+- `{nested}` - Nested exclusions (e.g., `agents: {dirs: [./path/]}`)
+"""
+
+
 class Profile(BaseModel):
     """Complete profile specification (YAGNI cleaned - no task/logging/ui fields)."""
 
@@ -69,3 +79,11 @@ class Profile(BaseModel):
     providers: list[ModuleConfig] = Field(default_factory=list)
     tools: list[ModuleConfig] = Field(default_factory=list)
     hooks: list[ModuleConfig] = Field(default_factory=list)
+    exclude: dict[str, ExclusionValue] | None = Field(
+        None,
+        description=(
+            "Selective inheritance exclusions. Applied to parent before merge, not propagated. "
+            "Syntax: `section: all` (exclude entire section), `section: [ids]` (exclude specific), "
+            "`section: {nested}` (nested exclusions). Example: `{tools: all, hooks: [hooks-logging]}`"
+        ),
+    )

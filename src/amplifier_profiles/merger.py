@@ -8,12 +8,124 @@ Key principles:
 - Config dictionaries are recursively deep-merged
 - Sources are inherited - child profiles don't need to repeat git URLs
 - Scalars override - simple values in child replace parent values
+- Exclusions allow selective inheritance (exclude sections or specific items)
 
 This supports the "merge-then-validate" pattern where validation happens
 after the complete inheritance chain is merged.
+
+Exclusion syntax:
+- `exclude: {tools: all}` - exclude entire tools section from inheritance
+- `exclude: {hooks: [hooks-logging, hooks-redaction]}` - exclude specific hooks
+- `exclude: {agents: {dirs: [./inherited/]}}` - exclude specific nested values
 """
 
 from typing import Any
+
+
+def apply_exclusions(inherited: dict[str, Any], exclusions: dict[str, Any]) -> dict[str, Any]:
+    """
+    Apply exclusions to inherited configuration.
+
+    Exclusions remove items from the inherited configuration before merging
+    with child additions. This enables selective inheritance.
+
+    Exclusion formats:
+    - `section: "all"` - Remove entire section (e.g., `tools: all`)
+    - `section: [list]` - Remove specific module IDs (e.g., `hooks: [hooks-logging]`)
+    - `section: {nested}` - Nested exclusions (e.g., `agents: {dirs: [./path/]}`)
+
+    Args:
+        inherited: Configuration inherited from parent (will be modified)
+        exclusions: Exclusion rules to apply
+
+    Returns:
+        Configuration with exclusions applied
+
+    Example:
+        >>> inherited = {
+        ...     "tools": [{"module": "tool-bash"}, {"module": "tool-web"}],
+        ...     "hooks": [{"module": "hooks-logging"}],
+        ... }
+        >>> exclusions = {"tools": "all", "hooks": ["hooks-logging"]}
+        >>> result = apply_exclusions(inherited, exclusions)
+        >>> result["tools"]  # Entire section excluded
+        []
+        >>> result["hooks"]  # Specific hook excluded
+        []
+    """
+    result = inherited.copy()
+
+    for section, exclusion_value in exclusions.items():
+        if section not in result:
+            # Section doesn't exist in inherited, nothing to exclude
+            continue
+
+        if exclusion_value == "all":
+            # Exclude entire section
+            result = _apply_exclude_all(result, section)
+
+        elif isinstance(exclusion_value, list):
+            # Exclude specific items from a module list
+            result = _apply_exclude_list(result, section, exclusion_value)
+
+        elif isinstance(exclusion_value, dict):
+            # Nested exclusions (e.g., agents: {dirs: [./path/], include: [agent-name]})
+            result = _apply_exclude_nested(result, section, exclusion_value)
+
+    return result
+
+
+def _apply_exclude_all(result: dict[str, Any], section: str) -> dict[str, Any]:
+    """Apply 'all' exclusion to a section - removes entire section content."""
+    if section in ("tools", "hooks", "providers"):
+        result[section] = []
+    elif section == "agents":
+        result[section] = {}
+    else:
+        # For other sections, remove entirely
+        del result[section]
+    return result
+
+
+def _apply_exclude_list(result: dict[str, Any], section: str, exclusion_list: list) -> dict[str, Any]:
+    """Apply list exclusion - removes specific items from module lists."""
+    if section in ("tools", "hooks", "providers") and isinstance(result[section], list):
+        result[section] = [item for item in result[section] if item.get("module") not in exclusion_list]
+    elif (
+        section == "agents"
+        and isinstance(result[section], dict)
+        and "dirs" in result[section]
+        and isinstance(result[section]["dirs"], list)
+    ):
+        # For agents, treat list as dirs to exclude
+        agents_copy = result[section].copy()
+        agents_copy["dirs"] = [d for d in agents_copy["dirs"] if d not in exclusion_list]
+        result[section] = agents_copy
+    return result
+
+
+def _apply_exclude_nested(result: dict[str, Any], section: str, nested_exclusions: dict) -> dict[str, Any]:
+    """Apply nested exclusions (e.g., agents: {dirs: [./path/], include: [agent-name]})."""
+    if not isinstance(result.get(section), dict):
+        return result
+
+    section_copy = result[section].copy()
+    for nested_key, nested_exclusion in nested_exclusions.items():
+        if nested_key not in section_copy:
+            continue
+
+        if nested_exclusion == "all":
+            # Exclude entire nested field
+            if isinstance(section_copy[nested_key], list):
+                section_copy[nested_key] = []
+            else:
+                del section_copy[nested_key]
+        elif isinstance(nested_exclusion, list) and isinstance(section_copy[nested_key], list):
+            # Exclude specific items from nested list
+            section_copy[nested_key] = [item for item in section_copy[nested_key] if item not in nested_exclusion]
+
+    result[section] = section_copy
+    return result
 
 
 def merge_profile_dicts(parent: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
@@ -21,6 +133,7 @@ def merge_profile_dicts(parent: dict[str, Any], child: dict[str, Any]) -> dict[s
     Deep merge child profile dictionary into parent profile dictionary.
 
     Merge rules by key:
+    - 'exclude': Applied to parent BEFORE merge, then removed (not propagated)
     - 'hooks', 'tools', 'providers': Merge module lists by module ID
     - Dict values: Recursive deep merge
     - Other values: Child overrides parent
@@ -50,10 +163,34 @@ def merge_profile_dicts(parent: dict[str, Any], child: dict[str, Any]) -> dict[s
         'X'
         >>> result["session"]["context"]["module"]  # Added
         'Y'
-    """
-    merged = parent.copy()
 
-    for key, child_value in child.items():
+    Example with exclusions:
+        >>> parent = {
+        ...     "tools": [{"module": "tool-bash"}, {"module": "tool-web"}],
+        ...     "hooks": [{"module": "hooks-logging"}],
+        ... }
+        >>> child = {
+        ...     "exclude": {"tools": "all", "hooks": ["hooks-logging"]},
+        ... }
+        >>> result = merge_profile_dicts(parent, child)
+        >>> result["tools"]  # Entire section excluded
+        []
+        >>> result["hooks"]  # Specific hook excluded
+        []
+        >>> "exclude" in result  # Exclusions not propagated
+        False
+    """
+    # Extract exclusions from child (applied to parent, not propagated to result)
+    child_copy = child.copy()
+    exclusions = child_copy.pop("exclude", None)
+
+    # Apply exclusions to parent before merging
+    merged = parent.copy()
+    if exclusions:
+        merged = apply_exclusions(merged, exclusions)
+
+    # Now merge child into (possibly excluded) parent
+    for key, child_value in child_copy.items():
         if key not in merged:
             # New key in child - just add it
             merged[key] = child_value

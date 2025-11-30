@@ -29,6 +29,7 @@ class TestCompileProfileToMountPlan:
             providers=[],
             tools=[],
             hooks=[],
+            exclude=None,
         )
 
         mount_plan = compile_profile_to_mount_plan(profile)
@@ -61,6 +62,7 @@ class TestCompileProfileToMountPlan:
             ],
             tools=[ModuleConfig(module="tool-filesystem", source=None, config=None)],
             hooks=[ModuleConfig(module="hooks-logging", source=None, config={"level": "DEBUG"})],
+            exclude=None,
         )
 
         mount_plan = compile_profile_to_mount_plan(profile)
@@ -90,6 +92,7 @@ class TestCompileProfileToMountPlan:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=AgentsConfig(dirs=["agents/"], include=None),
+            exclude=None,
         )
 
         mount_plan = compile_profile_to_mount_plan(profile)
@@ -106,6 +109,7 @@ class TestCompileProfileToMountPlan:
                 context=ModuleConfig(module="context-simple", source=None, config=None),
             ),
             agents=AgentsConfig(dirs=None, include=["test-agent"]),
+            exclude=None,
         )
 
         mount_plan = compile_profile_to_mount_plan(profile)
@@ -130,6 +134,7 @@ class TestCompileProfileToMountPlan:
                     config={"model": "claude-sonnet-4-5"},
                 )
             ],
+            exclude=None,
         )
 
         overlay = Profile(
@@ -147,6 +152,7 @@ class TestCompileProfileToMountPlan:
                 )
             ],
             tools=[ModuleConfig(module="tool-bash", source=None, config=None)],
+            exclude=None,
         )
 
         mount_plan = compile_profile_to_mount_plan(base, overlays=[overlay])
