@@ -738,6 +738,73 @@ hooks:
 ---
 ```
 
+### Sub-Agent Access Control
+
+Control which agents this agent can delegate to via its task tool:
+
+```yaml
+---
+meta:
+  name: zen-architect
+  description: "Design agent that delegates to builder only"
+
+# Restrict sub-agent delegation (Smart Single Value format)
+agents:
+  - modular-builder  # Can only delegate to modular-builder
+---
+```
+
+**Agents field options:**
+- **Omit entirely** → Inherit all parent agents (default)
+- **`agents: all`** → Explicitly inherit all parent agents
+- **`agents: none`** → Disable sub-agent delegation entirely
+- **`agents: [name1, name2]`** → Allow delegation only to listed agents
+
+**Example: Design → Build pipeline**
+
+```yaml
+---
+meta:
+  name: zen-architect
+  description: "Architecture design, delegates implementation to builder"
+
+agents:
+  - modular-builder  # Only this agent available for delegation
+
+tools:
+  - module: tool-filesystem
+---
+
+You design system architecture with ruthless simplicity.
+
+When implementation is needed, delegate to modular-builder with clear specifications.
+Do not delegate to other agents - focus on design only.
+```
+
+**Example: Disable delegation entirely**
+
+```yaml
+---
+meta:
+  name: leaf-worker
+  description: "Does work directly, no sub-delegation"
+
+agents: none  # Cannot call task tool to delegate
+
+tools:
+  - module: tool-filesystem
+  - module: tool-bash
+---
+
+You complete tasks directly without delegating to other agents.
+```
+
+**How it works:**
+1. Parent session has agents loaded (from profile)
+2. When agent spawns sub-session, its `agents` field filters parent's available agents
+3. Sub-session's task tool only sees filtered agents
+4. Agent can only delegate to allowed sub-agents
+
 ## Common Agent Patterns
 
 ### Research Agent

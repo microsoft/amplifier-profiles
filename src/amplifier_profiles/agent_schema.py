@@ -1,6 +1,7 @@
 """Pydantic schemas for Amplifier agents."""
 
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel
 from pydantic import ConfigDict
@@ -64,6 +65,16 @@ class Agent(BaseModel):
     # System instruction
     system: SystemConfig | None = Field(None, description="System instruction configuration")
 
+    # Sub-agent access control (Smart Single Value format, same as Profile.agents)
+    agents: Literal["all", "none"] | list[str] | None = Field(
+        None,
+        description=(
+            "Sub-agent access control: 'all' (inherit parent agents), 'none' (disable delegation), "
+            "or list of specific agent names this agent can delegate to. "
+            "If omitted, inherits parent session's agents."
+        ),
+    )
+
     def to_mount_plan_fragment(self) -> dict[str, Any]:
         """Convert agent to partial mount plan dict (configuration only).
 
@@ -94,5 +105,9 @@ class Agent(BaseModel):
         # Add system instruction if present
         if self.system:
             result["system"] = {"instruction": self.system.instruction}
+
+        # Add agents filter if specified (for sub-agent access control)
+        if self.agents is not None:
+            result["agents"] = self.agents
 
         return result
